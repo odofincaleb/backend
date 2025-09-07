@@ -11,9 +11,9 @@ const Spinner = styled.div`
   display: inline-block;
   width: ${props => props.size || '20px'};
   height: ${props => props.size || '20px'};
-  border: 2px solid ${props => props.theme.colors.border};
+  border: 2px solid #e2e8f0;
   border-radius: 50%;
-  border-top-color: ${props => props.theme.colors.primary};
+  border-top-color: #6366f1;
   animation: ${spin} 1s ease-in-out infinite;
 `;
 
@@ -28,14 +28,14 @@ const Container = styled.div`
     left: 0;
     right: 0;
     bottom: 0;
-    background: ${props.theme.colors.background}cc;
+    background: rgba(15, 23, 42, 0.8);
     z-index: 9999;
   `}
 `;
 
 const Text = styled.div`
   margin-left: 0.75rem;
-  color: ${props => props.theme.colors.textSecondary};
+  color: #64748b;
   font-size: 0.875rem;
 `;
 
