@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import styled from 'styled-components';
 import { Plus, Globe, Settings, Trash2, CheckCircle, XCircle } from 'lucide-react';
-import { Card, Button, Badge } from '../../styles/GlobalStyles';
+import { Card, Button, Badge, Input, Label, FormGroup } from '../../styles/GlobalStyles';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 
 const WordPressContainer = styled.div`
   max-width: 1200px;
@@ -108,9 +109,70 @@ const EmptyDescription = styled.p`
   margin-right: auto;
 `;
 
+const Modal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+`;
+
+const ModalContent = styled(Card)`
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+`;
+
+const ModalHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+`;
+
+const ModalTitle = styled.h2`
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: ${props => props.theme.colors.text};
+  margin: 0;
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: ${props => props.theme.colors.textMuted};
+  cursor: pointer;
+  padding: 0.25rem;
+  
+  &:hover {
+    color: ${props => props.theme.colors.text};
+  }
+`;
+
+const ModalActions = styled.div`
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+`;
+
 const WordPressSites = () => {
-  // Mock data - in real app, this would come from API
-  const sites = [];
+  const [sites, setSites] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    url: '',
+    username: '',
+    password: ''
+  });
+  const [loading, setLoading] = useState(false);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -123,11 +185,52 @@ const WordPressSites = () => {
     }
   };
 
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // TODO: Replace with actual API call
+      // const response = await wordpressAPI.addSite(formData);
+      
+      // Mock success for now
+      const newSite = {
+        id: Date.now(),
+        name: formData.name,
+        url: formData.url,
+        status: 'connected'
+      };
+      
+      setSites(prev => [...prev, newSite]);
+      setShowModal(false);
+      setFormData({ name: '', url: '', username: '', password: '' });
+      toast.success('WordPress site added successfully!');
+    } catch (error) {
+      toast.error('Failed to add WordPress site');
+      console.error('Error adding site:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteSite = (siteId) => {
+    setSites(prev => prev.filter(site => site.id !== siteId));
+    toast.success('WordPress site removed');
+  };
+
   return (
     <WordPressContainer>
       <Header>
         <Title>WordPress Sites</Title>
-        <Button variant="primary">
+        <Button variant="primary" onClick={() => setShowModal(true)}>
           <Plus size={20} />
           Add Site
         </Button>
@@ -157,7 +260,7 @@ const WordPressSites = () => {
                 <Button size="small" variant="ghost">
                   <Settings size={16} />
                 </Button>
-                <Button size="small" variant="ghost">
+                <Button size="small" variant="ghost" onClick={() => handleDeleteSite(site.id)}>
                   <Trash2 size={16} />
                 </Button>
               </SiteActions>
@@ -173,11 +276,94 @@ const WordPressSites = () => {
           <EmptyDescription>
             Connect your WordPress site to start publishing content automatically with your campaigns.
           </EmptyDescription>
-          <Button variant="primary">
+          <Button variant="primary" onClick={() => setShowModal(true)}>
             <Plus size={20} />
             Add Your First Site
           </Button>
         </EmptyState>
+      )}
+
+      {showModal && (
+        <Modal onClick={(e) => e.target === e.currentTarget && setShowModal(false)}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>Add WordPress Site</ModalTitle>
+              <CloseButton onClick={() => setShowModal(false)}>×</CloseButton>
+            </ModalHeader>
+
+            <form onSubmit={handleSubmit}>
+              <FormGroup>
+                <Label htmlFor="name">Site Name</Label>
+                <Input
+                  type="text"
+                  id="name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  placeholder="My WordPress Site"
+                  required
+                />
+              </FormGroup>
+
+              <FormGroup>
+                <Label htmlFor="url">Site URL</Label>
+                <Input
+                  type="url"
+                  id="url"
+                  name="url"
+                  value={formData.url}
+                  onChange={handleInputChange}
+                  placeholder="https://mysite.com"
+                  required
+                />
+              </FormGroup>
+
+              <FormGroup>
+                <Label htmlFor="username">WordPress Username</Label>
+                <Input
+                  type="text"
+                  id="username"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  placeholder="admin"
+                  required
+                />
+              </FormGroup>
+
+              <FormGroup>
+                <Label htmlFor="password">WordPress Password</Label>
+                <Input
+                  type="password"
+                  id="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  placeholder="Your WordPress password"
+                  required
+                />
+              </FormGroup>
+
+              <ModalActions>
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  onClick={() => setShowModal(false)}
+                  disabled={loading}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  variant="primary"
+                  disabled={loading}
+                >
+                  {loading ? 'Adding...' : 'Add Site'}
+                </Button>
+              </ModalActions>
+            </form>
+          </ModalContent>
+        </Modal>
       )}
     </WordPressContainer>
   );
