@@ -1,0 +1,59 @@
+{
+  "name": "fiddy-autopublisher-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for Fiddy AutoPublisher",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.8.1",
+    "axios": "^1.6.0",
+    "styled-components": "^6.1.1",
+    "react-hook-form": "^7.48.2",
+    "react-query": "^3.39.3",
+    "react-hot-toast": "^2.4.1",
+    "lucide-react": "^0.294.0",
+    "framer-motion": "^10.16.5",
+    "react-beautiful-dnd": "^13.1.1",
+    "date-fns": "^2.30.0",
+    "recharts": "^2.8.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^14.5.1",
+    "react-scripts": "5.0.1",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "@babel/preset-react": "^7.23.0",
+    "babel-jest": "^29.7.0",
+    "identity-obj-proxy": "^3.0.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "proxy": "http://localhost:5000"
+}

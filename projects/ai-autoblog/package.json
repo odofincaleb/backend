@@ -1,0 +1,43 @@
+{
+  "name": "fiddy-autopublisher",
+  "version": "1.0.0",
+  "description": "AI-Driven WordPress Content Engine",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:electron\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm start",
+    "dev:electron": "wait-on http://localhost:3000 && electron .",
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "start": "electron .",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "cd backend && npm test",
+    "test:frontend": "cd frontend && npm test",
+    "test:backend:watch": "cd backend && npm run test:watch",
+    "test:frontend:watch": "cd frontend && npm test",
+    "test:backend:coverage": "cd backend && npm test -- --coverage",
+    "test:frontend:coverage": "cd frontend && npm test -- --coverage",
+    "test:all:coverage": "npm run test:backend:coverage && npm run test:frontend:coverage",
+    "setup": "node scripts/setup.js"
+  },
+  "keywords": [
+    "ai",
+    "wordpress",
+    "content",
+    "automation",
+    "blogging"
+  ],
+  "author": "Fiddy AutoPublisher",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^27.0.0",
+    "wait-on": "^7.2.0"
+  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ]
+}

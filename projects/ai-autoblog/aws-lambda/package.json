@@ -1,0 +1,20 @@
+{
+  "name": "fiddy-autopublisher-lambda",
+  "version": "1.0.0",
+  "description": "AWS Lambda functions for Fiddy AutoPublisher",
+  "main": "index.js",
+  "scripts": {
+    "build": "zip -r lambda-functions.zip .",
+    "deploy": "aws lambda update-function-code --function-name fiddy-content-publisher --zip-file fileb://lambda-functions.zip"
+  },
+  "dependencies": {
+    "pg": "^8.11.3",
+    "openai": "^4.20.1",
+    "axios": "^1.6.0",
+    "crypto": "^1.0.1"
+  },
+  "devDependencies": {
+    "aws-sdk": "^2.1490.0"
+  }
+}
+
