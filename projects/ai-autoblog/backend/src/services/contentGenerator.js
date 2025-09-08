@@ -14,6 +14,108 @@ class ContentGenerator {
   }
 
   /**
+   * Generate blog post titles for a campaign
+   * @param {Object} campaign - Campaign data
+   * @param {number} count - Number of titles to generate
+   * @returns {Array} Array of generated titles
+   */
+  async generateTitles(campaign, count = 5) {
+    try {
+      if (!this.openai) {
+        throw new Error('OpenAI API key not configured. Cannot generate titles.');
+      }
+
+      logger.info(`Generating ${count} titles for campaign: ${campaign.topic}`);
+
+      // Build the title generation prompt
+      const prompt = this.buildTitlePrompt(campaign, count);
+      
+      // Generate titles using OpenAI
+      const completion = await this.openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert content strategist who creates compelling, SEO-optimized blog post titles. Generate titles that are engaging, click-worthy, and aligned with the business context."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.8
+      });
+
+      const generatedTitles = completion.choices[0].message.content;
+      
+      // Parse the titles (assuming they're returned as a numbered list)
+      const titles = this.parseTitles(generatedTitles);
+      
+      logger.info(`Generated ${titles.length} titles for campaign: ${campaign.topic}`);
+      return titles;
+
+    } catch (error) {
+      logger.error('Error generating titles:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Build prompt for title generation
+   * @param {Object} campaign - Campaign data
+   * @param {number} count - Number of titles to generate
+   * @returns {string} Generated prompt
+   */
+  buildTitlePrompt(campaign, count) {
+    const toneDescription = this.getToneDescription(campaign.tone_of_voice);
+    const styleDescription = this.getStyleDescription(campaign.writing_style);
+    
+    return `Generate ${count} compelling blog post titles for the following campaign:
+
+Topic: ${campaign.topic}
+Business Context: ${campaign.context}
+Tone of Voice: ${toneDescription}
+Writing Style: ${styleDescription}
+
+Requirements:
+- Titles should be 50-70 characters long for optimal SEO
+- Make them engaging and click-worthy
+- Include relevant keywords naturally
+- Align with the business context provided
+- Vary the approach (how-to, listicle, question, statement, etc.)
+- Avoid clickbait but make them compelling
+
+Return the titles as a numbered list (1. Title here, 2. Title here, etc.)`;
+  }
+
+  /**
+   * Parse generated titles from OpenAI response
+   * @param {string} response - OpenAI response text
+   * @returns {Array} Array of parsed titles
+   */
+  parseTitles(response) {
+    try {
+      // Split by lines and filter out empty lines
+      const lines = response.split('\n').filter(line => line.trim());
+      
+      const titles = [];
+      for (const line of lines) {
+        // Remove numbering (1., 2., etc.) and clean up
+        const title = line.replace(/^\d+\.\s*/, '').trim();
+        if (title && title.length > 10) { // Basic validation
+          titles.push(title);
+        }
+      }
+      
+      return titles;
+    } catch (error) {
+      logger.error('Error parsing titles:', error);
+      return [];
+    }
+  }
+
+  /**
    * Generate a blog post based on campaign parameters
    * @param {Object} campaign - Campaign data
    * @param {Object} options - Additional options
