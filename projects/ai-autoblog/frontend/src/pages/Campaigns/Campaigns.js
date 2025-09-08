@@ -143,48 +143,8 @@ const Campaigns = () => {
   const fetchCampaigns = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API call
-      // const response = await campaignsAPI.getCampaigns();
-      // setCampaigns(response.data);
-      
-      // Mock data for now
-      const mockCampaigns = [
-        {
-          id: 1,
-          topic: 'AI and Machine Learning',
-          context: 'Educational content about artificial intelligence, machine learning algorithms, and their real-world applications.',
-          tone_of_voice: 'conversational',
-          writing_style: 'pas',
-          schedule: '24h',
-          status: 'active',
-          posts_published_this_month: 5,
-          total_posts_published: 23,
-          next_publish_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          wordpress_site: {
-            id: 1,
-            site_name: 'Fiddyscript',
-            site_url: 'https://fiddyscript.com'
-          }
-        },
-        {
-          id: 2,
-          topic: 'Web Development',
-          context: 'Tutorials and guides for modern web development technologies including React, Node.js, and cloud deployment.',
-          tone_of_voice: 'formal',
-          writing_style: 'aida',
-          schedule: '48h',
-          status: 'paused',
-          posts_published_this_month: 2,
-          total_posts_published: 8,
-          next_publish_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
-          wordpress_site: {
-            id: 1,
-            site_name: 'Fiddyscript',
-            site_url: 'https://fiddyscript.com'
-          }
-        }
-      ];
-      setCampaigns(mockCampaigns);
+      const response = await campaignsAPI.getCampaigns();
+      setCampaigns(response.data.campaigns || []);
     } catch (error) {
       toast.error('Failed to fetch campaigns');
       console.error('Error fetching campaigns:', error);
@@ -196,8 +156,7 @@ const Campaigns = () => {
   const handleStartCampaign = async (campaignId) => {
     try {
       setActionLoading(prev => ({ ...prev, [campaignId]: true }));
-      // TODO: Replace with actual API call
-      // await campaignsAPI.startCampaign(campaignId);
+      await campaignsAPI.startCampaign(campaignId);
       
       setCampaigns(prev => prev.map(campaign => 
         campaign.id === campaignId 
@@ -216,8 +175,7 @@ const Campaigns = () => {
   const handlePauseCampaign = async (campaignId) => {
     try {
       setActionLoading(prev => ({ ...prev, [campaignId]: true }));
-      // TODO: Replace with actual API call
-      // await campaignsAPI.stopCampaign(campaignId);
+      await campaignsAPI.stopCampaign(campaignId);
       
       setCampaigns(prev => prev.map(campaign => 
         campaign.id === campaignId 
@@ -240,8 +198,7 @@ const Campaigns = () => {
 
     try {
       setActionLoading(prev => ({ ...prev, [campaignId]: true }));
-      // TODO: Replace with actual API call
-      // await campaignsAPI.deleteCampaign(campaignId);
+      await campaignsAPI.deleteCampaign(campaignId);
       
       setCampaigns(prev => prev.filter(campaign => campaign.id !== campaignId));
       toast.success('Campaign deleted successfully');
@@ -311,9 +268,9 @@ const Campaigns = () => {
               </CampaignContext>
 
               <CampaignStats>
-                <span><Target size={12} /> {campaign.total_posts_published} posts</span>
-                <span><Calendar size={12} /> Next: {formatNextPublish(campaign.next_publish_at)}</span>
-                <span><Globe size={12} /> {campaign.wordpress_site?.site_name}</span>
+                <span><Target size={12} /> {campaign.postsPublished || 0} posts</span>
+                <span><Calendar size={12} /> Next: {formatNextPublish(campaign.nextPublishAt)}</span>
+                <span><Globe size={12} /> {campaign.wordpressSite?.name || 'No site'}</span>
               </CampaignStats>
 
               <CampaignActions>

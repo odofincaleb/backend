@@ -112,14 +112,8 @@ const CreateCampaign = () => {
 
   const fetchWordpressSites = async () => {
     try {
-      // TODO: Replace with actual API call
-      // const response = await wordpressAPI.getSites();
-      // setWordpressSites(response.data);
-      
-      // Mock data for now
-      setWordpressSites([
-        { id: 1, site_name: 'Fiddyscript', site_url: 'https://fiddyscript.com' }
-      ]);
+      const response = await wordpressAPI.getSites();
+      setWordpressSites(response.data.sites || []);
     } catch (error) {
       toast.error('Failed to fetch WordPress sites');
       console.error('Error fetching WordPress sites:', error);
@@ -129,25 +123,24 @@ const CreateCampaign = () => {
   const fetchCampaign = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API call
-      // const response = await campaignsAPI.getCampaign(id);
-      // const campaign = response.data;
-      
-      // Mock data for editing
-      const campaign = {
-        topic: 'AI and Machine Learning',
-        context: 'Educational content about artificial intelligence, machine learning algorithms, and their real-world applications.',
-        tone_of_voice: 'conversational',
-        writing_style: 'pas',
-        schedule: '24h',
-        wordpress_site_id: 1,
-        imperfection_list: ['grammar errors', 'typos', 'repetitive phrases']
+      const response = await campaignsAPI.getCampaign(id);
+      const campaign = response.data.campaign;
+
+      // Map API response to form fields
+      const formData = {
+        topic: campaign.topic,
+        context: campaign.context,
+        tone_of_voice: campaign.toneOfVoice,
+        writing_style: campaign.writingStyle,
+        schedule: campaign.schedule,
+        wordpress_site_id: campaign.wordpressSite?.id || '',
+        imperfection_list: campaign.imperfectionList || []
       };
 
-      Object.keys(campaign).forEach(key => {
-        setValue(key, campaign[key]);
+      Object.keys(formData).forEach(key => {
+        setValue(key, formData[key]);
       });
-      setImperfectionList(campaign.imperfection_list || []);
+      setImperfectionList(formData.imperfection_list);
     } catch (error) {
       toast.error('Failed to fetch campaign');
       console.error('Error fetching campaign:', error);
@@ -170,18 +163,23 @@ const CreateCampaign = () => {
   const onSubmit = async (data) => {
     try {
       setLoading(true);
+      
+      // Map form data to API format
       const campaignData = {
-        ...data,
-        imperfection_list: imperfectionList
+        topic: data.topic,
+        context: data.context,
+        toneOfVoice: data.tone_of_voice,
+        writingStyle: data.writing_style,
+        schedule: data.schedule,
+        wordpressSiteId: data.wordpress_site_id || null,
+        imperfectionList: imperfectionList
       };
 
       if (isEditing) {
-        // TODO: Replace with actual API call
-        // await campaignsAPI.updateCampaign(id, campaignData);
+        await campaignsAPI.updateCampaign(id, campaignData);
         toast.success('Campaign updated successfully');
       } else {
-        // TODO: Replace with actual API call
-        // await campaignsAPI.createCampaign(campaignData);
+        await campaignsAPI.createCampaign(campaignData);
         toast.success('Campaign created successfully');
       }
 
@@ -278,7 +276,7 @@ const CreateCampaign = () => {
               <option value="">Select a WordPress site</option>
               {wordpressSites.map(site => (
                 <option key={site.id} value={site.id}>
-                  {site.site_name} ({site.site_url})
+                  {site.siteName} ({site.siteUrl})
                 </option>
               ))}
             </Select>
