@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { Plus, Target, Play, Pause, Settings, Trash2 } from 'lucide-react';
+import { Plus, Target, Play, Pause, Settings, Trash2, Edit, Calendar, Globe } from 'lucide-react';
 import { Card, Button, Badge } from '../../styles/GlobalStyles';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { campaignsAPI } from '../../services/api';
+import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
 
 const CampaignsContainer = styled.div`
   max-width: 1200px;
@@ -127,8 +130,128 @@ const EmptyDescription = styled.p`
 `;
 
 const Campaigns = () => {
-  // Mock data - in real app, this would come from API
-  const campaigns = [];
+  const [campaigns, setCampaigns] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState({});
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchCampaigns();
+  }, []);
+
+  const fetchCampaigns = async () => {
+    try {
+      setLoading(true);
+      // TODO: Replace with actual API call
+      // const response = await campaignsAPI.getCampaigns();
+      // setCampaigns(response.data);
+      
+      // Mock data for now
+      const mockCampaigns = [
+        {
+          id: 1,
+          topic: 'AI and Machine Learning',
+          context: 'Educational content about artificial intelligence, machine learning algorithms, and their real-world applications.',
+          tone_of_voice: 'conversational',
+          writing_style: 'pas',
+          schedule: '24h',
+          status: 'active',
+          posts_published_this_month: 5,
+          total_posts_published: 23,
+          next_publish_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          wordpress_site: {
+            id: 1,
+            site_name: 'Fiddyscript',
+            site_url: 'https://fiddyscript.com'
+          }
+        },
+        {
+          id: 2,
+          topic: 'Web Development',
+          context: 'Tutorials and guides for modern web development technologies including React, Node.js, and cloud deployment.',
+          tone_of_voice: 'formal',
+          writing_style: 'aida',
+          schedule: '48h',
+          status: 'paused',
+          posts_published_this_month: 2,
+          total_posts_published: 8,
+          next_publish_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
+          wordpress_site: {
+            id: 1,
+            site_name: 'Fiddyscript',
+            site_url: 'https://fiddyscript.com'
+          }
+        }
+      ];
+      setCampaigns(mockCampaigns);
+    } catch (error) {
+      toast.error('Failed to fetch campaigns');
+      console.error('Error fetching campaigns:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStartCampaign = async (campaignId) => {
+    try {
+      setActionLoading(prev => ({ ...prev, [campaignId]: true }));
+      // TODO: Replace with actual API call
+      // await campaignsAPI.startCampaign(campaignId);
+      
+      setCampaigns(prev => prev.map(campaign => 
+        campaign.id === campaignId 
+          ? { ...campaign, status: 'active' }
+          : campaign
+      ));
+      toast.success('Campaign started successfully');
+    } catch (error) {
+      toast.error('Failed to start campaign');
+      console.error('Error starting campaign:', error);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [campaignId]: false }));
+    }
+  };
+
+  const handlePauseCampaign = async (campaignId) => {
+    try {
+      setActionLoading(prev => ({ ...prev, [campaignId]: true }));
+      // TODO: Replace with actual API call
+      // await campaignsAPI.stopCampaign(campaignId);
+      
+      setCampaigns(prev => prev.map(campaign => 
+        campaign.id === campaignId 
+          ? { ...campaign, status: 'paused' }
+          : campaign
+      ));
+      toast.success('Campaign paused successfully');
+    } catch (error) {
+      toast.error('Failed to pause campaign');
+      console.error('Error pausing campaign:', error);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [campaignId]: false }));
+    }
+  };
+
+  const handleDeleteCampaign = async (campaignId) => {
+    if (!window.confirm('Are you sure you want to delete this campaign? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setActionLoading(prev => ({ ...prev, [campaignId]: true }));
+      // TODO: Replace with actual API call
+      // await campaignsAPI.deleteCampaign(campaignId);
+      
+      setCampaigns(prev => prev.filter(campaign => campaign.id !== campaignId));
+      toast.success('Campaign deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete campaign');
+      console.error('Error deleting campaign:', error);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [campaignId]: false }));
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -143,6 +266,17 @@ const Campaigns = () => {
     }
   };
 
+  const formatNextPublish = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffHours = Math.ceil((date - now) / (1000 * 60 * 60));
+    
+    if (diffHours <= 0) return 'Now';
+    if (diffHours < 24) return `${diffHours}h`;
+    const diffDays = Math.ceil(diffHours / 24);
+    return `${diffDays}d`;
+  };
+
   return (
     <CampaignsContainer>
       <Header>
@@ -153,12 +287,16 @@ const Campaigns = () => {
         </Button>
       </Header>
 
-      {campaigns.length > 0 ? (
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <p>Loading campaigns...</p>
+        </div>
+      ) : campaigns.length > 0 ? (
         <CampaignsGrid>
           {campaigns.map((campaign) => (
             <CampaignCard key={campaign.id}>
               <CampaignHeader>
-                <CampaignTitle>{campaign.name}</CampaignTitle>
+                <CampaignTitle>{campaign.topic}</CampaignTitle>
                 <CampaignStatus variant={getStatusColor(campaign.status)}>
                   {campaign.status}
                 </CampaignStatus>
@@ -173,19 +311,36 @@ const Campaigns = () => {
               </CampaignContext>
 
               <CampaignStats>
-                <span>Posts: {campaign.postsPublished}</span>
-                <span>Next: {campaign.nextPublish}</span>
-                <span>Schedule: {campaign.schedule}</span>
+                <span><Target size={12} /> {campaign.total_posts_published} posts</span>
+                <span><Calendar size={12} /> Next: {formatNextPublish(campaign.next_publish_at)}</span>
+                <span><Globe size={12} /> {campaign.wordpress_site?.site_name}</span>
               </CampaignStats>
 
               <CampaignActions>
-                <Button size="small" variant="ghost">
-                  <Settings size={16} />
+                <Button 
+                  size="small" 
+                  variant="ghost"
+                  onClick={() => navigate(`/campaigns/${campaign.id}`)}
+                  title="Edit Campaign"
+                >
+                  <Edit size={16} />
                 </Button>
-                <Button size="small" variant="ghost">
+                <Button 
+                  size="small" 
+                  variant="ghost"
+                  onClick={() => campaign.status === 'active' ? handlePauseCampaign(campaign.id) : handleStartCampaign(campaign.id)}
+                  disabled={actionLoading[campaign.id]}
+                  title={campaign.status === 'active' ? 'Pause Campaign' : 'Start Campaign'}
+                >
                   {campaign.status === 'active' ? <Pause size={16} /> : <Play size={16} />}
                 </Button>
-                <Button size="small" variant="ghost">
+                <Button 
+                  size="small" 
+                  variant="ghost"
+                  onClick={() => handleDeleteCampaign(campaign.id)}
+                  disabled={actionLoading[campaign.id]}
+                  title="Delete Campaign"
+                >
                   <Trash2 size={16} />
                 </Button>
               </CampaignActions>
