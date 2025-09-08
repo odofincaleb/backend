@@ -3,6 +3,8 @@ const Joi = require('joi');
 const { query } = require('../database/connection');
 const { authenticateToken, requireSubscription } = require('../middleware/auth');
 const { generateLicenseKey } = require('../utils/encryption');
+const campaignScheduler = require('../services/campaignScheduler');
+const queueProcessor = require('../services/queueProcessor');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -599,6 +601,144 @@ router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to get system statistics'
+    });
+  }
+});
+
+/**
+ * GET /api/admin/queue/stats
+ * Get content queue statistics
+ */
+router.get('/queue/stats', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const stats = await queueProcessor.getQueueStats();
+    
+    res.json({
+      message: 'Queue statistics retrieved successfully',
+      stats
+    });
+
+  } catch (error) {
+    logger.error('Get queue stats error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to get queue statistics'
+    });
+  }
+});
+
+/**
+ * GET /api/admin/queue/activity
+ * Get recent queue activity
+ */
+router.get('/queue/activity', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const activity = await queueProcessor.getRecentActivity(limit);
+    
+    res.json({
+      message: 'Queue activity retrieved successfully',
+      activity
+    });
+
+  } catch (error) {
+    logger.error('Get queue activity error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to get queue activity'
+    });
+  }
+});
+
+/**
+ * POST /api/admin/queue/process
+ * Manually trigger queue processing
+ */
+router.post('/queue/process', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await campaignScheduler.triggerCampaignProcessing();
+    
+    if (result.success) {
+      res.json({
+        message: 'Queue processing triggered successfully',
+        result
+      });
+    } else {
+      res.status(500).json({
+        error: 'Queue processing failed',
+        message: result.message
+      });
+    }
+
+  } catch (error) {
+    logger.error('Trigger queue processing error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to trigger queue processing'
+    });
+  }
+});
+
+/**
+ * GET /api/admin/scheduler/status
+ * Get campaign scheduler status
+ */
+router.get('/scheduler/status', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const status = campaignScheduler.getStatus();
+    
+    res.json({
+      message: 'Scheduler status retrieved successfully',
+      status
+    });
+
+  } catch (error) {
+    logger.error('Get scheduler status error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to get scheduler status'
+    });
+  }
+});
+
+/**
+ * POST /api/admin/scheduler/start
+ * Start the campaign scheduler
+ */
+router.post('/scheduler/start', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    campaignScheduler.start();
+    
+    res.json({
+      message: 'Campaign scheduler started successfully'
+    });
+
+  } catch (error) {
+    logger.error('Start scheduler error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to start scheduler'
+    });
+  }
+});
+
+/**
+ * POST /api/admin/scheduler/stop
+ * Stop the campaign scheduler
+ */
+router.post('/scheduler/stop', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    campaignScheduler.stop();
+    
+    res.json({
+      message: 'Campaign scheduler stopped successfully'
+    });
+
+  } catch (error) {
+    logger.error('Stop scheduler error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to stop scheduler'
     });
   }
 });

@@ -17,6 +17,9 @@ const wordpressRoutes = require('./routes/wordpress');
 const licenseRoutes = require('./routes/license');
 const adminRoutes = require('./routes/admin');
 
+// Import services
+const campaignScheduler = require('./services/campaignScheduler');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -35,8 +38,7 @@ app.use(helmet({
 // CORS configuration
 app.use(cors({
   origin: [
-    '
-    http://localhost:3000', 
+    'http://localhost:3000', 
     'http://localhost:3001',
     'https://yourdomain.com',
     'https://fiddy-autopublisher.vercel.app',
@@ -126,6 +128,10 @@ const gracefulShutdown = async (signal) => {
   logger.info(`Received ${signal}. Starting graceful shutdown...`);
   
   try {
+    // Stop campaign scheduler
+    campaignScheduler.stop();
+    logger.info('Campaign scheduler stopped');
+    
     // Close database connections
     const { closePool } = require('./database/connection');
     await closePool();
@@ -162,6 +168,10 @@ const startServer = async () => {
       logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
       logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
     });
+
+    // Start campaign scheduler
+    campaignScheduler.start();
+    logger.info('🤖 Campaign scheduler started');
 
     // Handle graceful shutdown
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
