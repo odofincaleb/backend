@@ -18,7 +18,7 @@ const createCampaignSchema = Joi.object({
   wordpressSiteId: Joi.string().uuid().optional()
 }).custom((value, helpers) => {
   // Ensure at least one schedule option is provided
-  if (!value.schedule && !value.scheduleHours) {
+  if (!value.schedule && (value.scheduleHours === undefined || value.scheduleHours === null)) {
     return helpers.error('custom.scheduleRequired');
   }
   return value;
@@ -182,6 +182,7 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
     // Validate input
     const { error, value } = createCampaignSchema.validate(req.body);
     if (error) {
+      logger.error('Campaign validation error:', error);
       return res.status(400).json({
         error: 'Validation error',
         message: error.details[0].message
@@ -297,7 +298,8 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
     logger.error('Create campaign error:', error);
     res.status(500).json({
       error: 'Internal server error',
-      message: 'Failed to create campaign'
+      message: 'Failed to create campaign',
+      details: error.message
     });
   }
 });
