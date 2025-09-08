@@ -38,8 +38,19 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
+      console.log('Attempting login with:', { email, password: '***' });
       const response = await authAPI.login(email, password);
+      console.log('Login response:', response);
+      
+      if (!response || !response.data) {
+        throw new Error('Invalid response from server');
+      }
+      
       const { user: userData, token: newToken } = response.data;
+      
+      if (!userData || !newToken) {
+        throw new Error('Missing user data or token in response');
+      }
       
       localStorage.setItem('token', newToken);
       setToken(newToken);
@@ -48,7 +59,8 @@ export const AuthProvider = ({ children }) => {
       toast.success('Welcome back!');
       return { success: true };
     } catch (error) {
-      const message = error.response?.data?.message || 'Login failed';
+      console.error('Login error details:', error);
+      const message = error.response?.data?.message || error.message || 'Login failed';
       toast.error(message);
       return { success: false, error: message };
     }

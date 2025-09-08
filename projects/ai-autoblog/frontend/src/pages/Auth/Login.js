@@ -174,12 +174,15 @@ const Login = () => {
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
+      console.log('Login form submitted with data:', data);
       const result = await login(data.email, data.password);
-      if (result.success) {
+      console.log('Login result:', result);
+      if (result && result.success) {
         navigate('/dashboard');
       }
     } catch (error) {
       console.error('Login error:', error);
+      toast.error('Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
