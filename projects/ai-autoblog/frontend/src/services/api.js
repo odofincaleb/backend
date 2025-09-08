@@ -9,6 +9,7 @@ const api = axios.create({
   },
 });
 
+
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
@@ -38,18 +39,7 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
-  login: async (email, password) => {
-    console.log('API login called with:', { email, password: '***' });
-    console.log('API base URL:', api.defaults.baseURL);
-    try {
-      const response = await api.post('/auth/login', { email, password });
-      console.log('API login success:', response.data);
-      return response;
-    } catch (error) {
-      console.error('API login error:', error);
-      throw error;
-    }
-  },
+  login: (email, password) => api.post('/auth/login', { email, password }),
   register: (userData) => api.post('/auth/register', userData),
   getProfile: () => api.get('/auth/me'),
   changePassword: (data) => api.put('/auth/change-password', data),

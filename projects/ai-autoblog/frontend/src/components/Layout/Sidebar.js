@@ -191,7 +191,9 @@ const ToggleButton = styled.button`
   }
 `;
 
-const MobileOverlay = styled.div`
+const MobileOverlay = styled.div.withConfig({
+  shouldForwardProp: (prop) => !['isOpen'].includes(prop),
+})`
   position: fixed;
   top: 0;
   left: 0;

@@ -10,7 +10,9 @@ const LayoutContainer = styled.div`
   background: ${props => props.theme.colors.background};
 `;
 
-const MainContent = styled.main`
+const MainContent = styled.main.withConfig({
+  shouldForwardProp: (prop) => !['sidebarOpen'].includes(prop),
+})`
   flex: 1;
   display: flex;
   flex-direction: column;
