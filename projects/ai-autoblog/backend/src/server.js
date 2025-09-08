@@ -40,14 +40,24 @@ app.use(helmet({
 
 // CORS configuration
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'https://yourdomain.com',
-    'https://fiddy-autopublisher.vercel.app',
-    'https://fiddy-autopublisher.netlify.app',
-    'null' // Allow file:// protocol for testing
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://yourdomain.com',
+      'https://fiddy-autopublisher.vercel.app',
+      'https://fiddy-autopublisher.netlify.app'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all origins for testing
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
