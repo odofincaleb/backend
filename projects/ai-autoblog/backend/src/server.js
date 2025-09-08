@@ -169,9 +169,15 @@ const startServer = async () => {
       logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
     });
 
-    // Start campaign scheduler
-    campaignScheduler.start();
-    logger.info('🤖 Campaign scheduler started');
+    // Start campaign scheduler (with delay to ensure database is ready)
+    setTimeout(() => {
+      try {
+        campaignScheduler.start();
+        logger.info('🤖 Campaign scheduler started');
+      } catch (error) {
+        logger.error('Failed to start campaign scheduler:', error);
+      }
+    }, 5000); // 5 second delay
 
     // Handle graceful shutdown
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

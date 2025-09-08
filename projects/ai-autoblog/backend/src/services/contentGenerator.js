@@ -3,9 +3,14 @@ const logger = require('../utils/logger');
 
 class ContentGenerator {
   constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
+    if (process.env.OPENAI_API_KEY) {
+      this.openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY
+      });
+    } else {
+      this.openai = null;
+      logger.warn('OpenAI API key not configured. Content generation will be disabled.');
+    }
   }
 
   /**
@@ -16,6 +21,10 @@ class ContentGenerator {
    */
   async generateBlogPost(campaign, options = {}) {
     try {
+      if (!this.openai) {
+        throw new Error('OpenAI API key not configured. Cannot generate content.');
+      }
+
       logger.info(`Generating content for campaign: ${campaign.topic}`);
 
       // Build the prompt based on campaign parameters
@@ -137,6 +146,11 @@ CONTENT: [Your full blog post content here]`;
    */
   async generateKeywords(topic, content) {
     try {
+      if (!this.openai) {
+        logger.warn('OpenAI not available, using fallback keywords');
+        return [topic.toLowerCase(), 'blog', 'article', 'tips', 'guide'];
+      }
+
       const completion = await this.openai.chat.completions.create({
         model: "gpt-3.5-turbo",
         messages: [
@@ -184,8 +198,8 @@ CONTENT: [Your full blog post content here]`;
    */
   async generateFeaturedImage(imagePrompt) {
     try {
-      if (!process.env.OPENAI_API_KEY) {
-        logger.warn('OpenAI API key not configured, skipping image generation');
+      if (!this.openai) {
+        logger.warn('OpenAI not available, skipping image generation');
         return null;
       }
 
