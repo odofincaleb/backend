@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { 
   Target, 
@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { Card, Button } from '../../styles/GlobalStyles';
 import { Link } from 'react-router-dom';
+import { campaignsAPI, wordpressAPI } from '../../services/api';
 
 const DashboardContainer = styled.div`
   max-width: 1200px;
@@ -191,13 +192,58 @@ const EmptyState = styled.div`
 
 const Dashboard = () => {
   const { user } = useAuth();
-
-  // Mock data - in real app, this would come from API
-  const stats = {
+  const [stats, setStats] = useState({
     campaigns: 0,
     wordpressSites: 0,
-    postsPublished: user?.totalPostsPublished || 0,
-    postsThisMonth: user?.postsPublishedThisMonth || 0,
+    postsPublished: 0,
+    postsThisMonth: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardStats();
+  }, []);
+
+  // Refresh stats when component becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchDashboardStats();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  const fetchDashboardStats = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch campaigns and WordPress sites in parallel
+      const [campaignsResponse, sitesResponse] = await Promise.all([
+        campaignsAPI.getCampaigns(),
+        wordpressAPI.getSites()
+      ]);
+
+      const campaigns = campaignsResponse.data.campaigns || [];
+      const sites = sitesResponse.data.sites || [];
+
+      // Calculate stats
+      const activeCampaigns = campaigns.filter(c => c.status === 'active').length;
+      const totalPosts = campaigns.reduce((sum, c) => sum + (c.postsPublished || 0), 0);
+
+      setStats({
+        campaigns: activeCampaigns,
+        wordpressSites: sites.length,
+        postsPublished: totalPosts,
+        postsThisMonth: user?.postsPublishedThisMonth || 0,
+      });
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const recentActivity = [
