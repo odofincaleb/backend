@@ -456,6 +456,61 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
 });
 
 /**
+ * POST /api/campaigns/:id/trigger
+ * Manually trigger campaign processing
+ */
+router.post('/:id/trigger', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const campaignId = req.params.id;
+
+    // Get campaign details
+    const campaignResult = await query(
+      `SELECT c.*, ws.site_name, ws.site_url, ws.username, ws.password_encrypted, ws.api_endpoint
+       FROM campaigns c
+       LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
+       WHERE c.id = $1 AND c.user_id = $2`,
+      [campaignId, userId]
+    );
+
+    if (campaignResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Campaign not found'
+      });
+    }
+
+    const campaign = campaignResult.rows[0];
+
+    // Import queue processor
+    const queueProcessor = require('../services/queueProcessor');
+    
+    // Process the campaign immediately
+    await queueProcessor.processCampaign(campaign);
+
+    // Log manual trigger
+    await query(
+      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
+       VALUES ($1, $2, 'manual_trigger', 'Campaign manually triggered for processing', 'info')`,
+      [userId, campaignId]
+    );
+
+    logger.info('Campaign manually triggered:', { userId, campaignId });
+
+    res.json({
+      message: 'Campaign processing triggered successfully'
+    });
+
+  } catch (error) {
+    logger.error('Manual trigger error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to trigger campaign processing',
+      details: error.message
+    });
+  }
+});
+
+/**
  * POST /api/campaigns/:id/stop
  * Stop a campaign
  */
