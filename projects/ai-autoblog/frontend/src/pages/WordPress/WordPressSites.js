@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { Plus, Globe, Settings, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { Card, Button, Badge, Input, Label, FormGroup } from '../../styles/GlobalStyles';
 import { useNavigate } from 'react-router-dom';
+import { wordpressAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const WordPressContainer = styled.div`
@@ -167,22 +168,33 @@ const WordPressSites = () => {
   const [sites, setSites] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    url: '',
+    siteName: '',
+    siteUrl: '',
     username: '',
     password: ''
   });
   const [loading, setLoading] = useState(false);
+  const [fetchLoading, setFetchLoading] = useState(true);
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'connected':
-        return 'success';
-      case 'error':
-        return 'error';
-      default:
-        return 'warning';
+  useEffect(() => {
+    fetchSites();
+  }, []);
+
+  const fetchSites = async () => {
+    try {
+      setFetchLoading(true);
+      const response = await wordpressAPI.getSites();
+      setSites(response.data.sites || []);
+    } catch (error) {
+      toast.error('Failed to fetch WordPress sites');
+      console.error('Error fetching sites:', error);
+    } finally {
+      setFetchLoading(false);
     }
+  };
+
+  const getStatusColor = (isActive) => {
+    return isActive ? 'success' : 'error';
   };
 
   const handleInputChange = (e) => {
@@ -198,21 +210,12 @@ const WordPressSites = () => {
     setLoading(true);
 
     try {
-      // TODO: Replace with actual API call
-      // const response = await wordpressAPI.addSite(formData);
-      
-      // Mock success for now
-      const newSite = {
-        id: Date.now(),
-        name: formData.name,
-        url: formData.url,
-        status: 'connected'
-      };
-      
-      setSites(prev => [...prev, newSite]);
-      setShowModal(false);
-      setFormData({ name: '', url: '', username: '', password: '' });
+      const response = await wordpressAPI.addSite(formData);
       toast.success('WordPress site added successfully!');
+      setShowModal(false);
+      setFormData({ siteName: '', siteUrl: '', username: '', password: '' });
+      // Refresh the sites list
+      fetchSites();
     } catch (error) {
       toast.error('Failed to add WordPress site');
       console.error('Error adding site:', error);
@@ -221,9 +224,20 @@ const WordPressSites = () => {
     }
   };
 
-  const handleDeleteSite = (siteId) => {
-    setSites(prev => prev.filter(site => site.id !== siteId));
-    toast.success('WordPress site removed');
+  const handleDeleteSite = async (siteId) => {
+    if (!window.confirm('Are you sure you want to delete this WordPress site? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await wordpressAPI.deleteSite(siteId);
+      toast.success('WordPress site deleted successfully');
+      // Refresh the sites list
+      fetchSites();
+    } catch (error) {
+      toast.error('Failed to delete WordPress site');
+      console.error('Error deleting site:', error);
+    }
   };
 
   return (
@@ -236,14 +250,18 @@ const WordPressSites = () => {
         </Button>
       </Header>
 
-      {sites.length > 0 ? (
+      {fetchLoading ? (
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <p>Loading WordPress sites...</p>
+        </div>
+      ) : sites.length > 0 ? (
         <SitesGrid>
           {sites.map((site) => (
             <SiteCard key={site.id}>
               <SiteHeader>
-                <SiteName>{site.name}</SiteName>
-                <SiteStatus variant={getStatusColor(site.status)}>
-                  {site.status === 'connected' ? (
+                <SiteName>{site.siteName}</SiteName>
+                <SiteStatus variant={getStatusColor(site.isActive)}>
+                  {site.isActive ? (
                     <><CheckCircle size={12} /> Connected</>
                   ) : (
                     <><XCircle size={12} /> Error</>
@@ -253,7 +271,7 @@ const WordPressSites = () => {
 
               <SiteUrl>
                 <Globe size={16} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
-                {site.url}
+                {site.siteUrl}
               </SiteUrl>
 
               <SiteActions>
@@ -293,12 +311,12 @@ const WordPressSites = () => {
 
             <form onSubmit={handleSubmit}>
               <FormGroup>
-                <Label htmlFor="name">Site Name</Label>
+                <Label htmlFor="siteName">Site Name</Label>
                 <Input
                   type="text"
-                  id="name"
-                  name="name"
-                  value={formData.name}
+                  id="siteName"
+                  name="siteName"
+                  value={formData.siteName}
                   onChange={handleInputChange}
                   placeholder="My WordPress Site"
                   required
@@ -306,12 +324,12 @@ const WordPressSites = () => {
               </FormGroup>
 
               <FormGroup>
-                <Label htmlFor="url">Site URL</Label>
+                <Label htmlFor="siteUrl">Site URL</Label>
                 <Input
                   type="url"
-                  id="url"
-                  name="url"
-                  value={formData.url}
+                  id="siteUrl"
+                  name="siteUrl"
+                  value={formData.siteUrl}
                   onChange={handleInputChange}
                   placeholder="https://mysite.com"
                   required
