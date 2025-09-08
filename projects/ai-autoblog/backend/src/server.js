@@ -45,7 +45,8 @@ app.use(cors({
     'http://localhost:3001',
     'https://yourdomain.com',
     'https://fiddy-autopublisher.vercel.app',
-    'https://fiddy-autopublisher.netlify.app'
+    'https://fiddy-autopublisher.netlify.app',
+    'null' // Allow file:// protocol for testing
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
