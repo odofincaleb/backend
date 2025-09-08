@@ -23,6 +23,9 @@ const campaignScheduler = require('./services/campaignScheduler');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy for Railway deployment
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: {
@@ -38,7 +41,7 @@ app.use(helmet({
 // CORS configuration
 app.use(cors({
   origin: [
-    'http://localhost:3000', 
+    'http://localhost:3000',
     'http://localhost:3001',
     'https://yourdomain.com',
     'https://fiddy-autopublisher.vercel.app',
