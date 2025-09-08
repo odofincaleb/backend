@@ -246,9 +246,32 @@ const Dashboard = () => {
     }
   };
 
-  const recentActivity = [
-    // Mock activity - in real app, this would come from API
-  ];
+  const [recentActivity, setRecentActivity] = useState([]);
+
+  const fetchRecentActivity = async () => {
+    try {
+      // For now, we'll create activity based on campaigns
+      const campaignsResponse = await campaignsAPI.getCampaigns();
+      const campaigns = campaignsResponse.data.campaigns || [];
+      
+      const activity = campaigns.map(campaign => ({
+        id: campaign.id,
+        type: 'campaign_created',
+        title: `Campaign "${campaign.topic}" created`,
+        time: new Date(campaign.createdAt).toLocaleString(),
+        icon: <Target />,
+        color: '#6366f1'
+      }));
+
+      setRecentActivity(activity.slice(0, 5)); // Show last 5 activities
+    } catch (error) {
+      console.error('Error fetching recent activity:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecentActivity();
+  }, []);
 
   return (
     <DashboardContainer>
