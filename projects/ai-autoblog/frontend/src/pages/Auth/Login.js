@@ -172,9 +172,11 @@ const Login = () => {
   } = useForm();
 
   const onSubmit = async (data) => {
+    console.log('Login form submitted with data:', data);
     setIsLoading(true);
     try {
       const result = await login(data.email, data.password);
+      console.log('Login result:', result);
       if (result.success) {
         navigate('/dashboard');
       }
