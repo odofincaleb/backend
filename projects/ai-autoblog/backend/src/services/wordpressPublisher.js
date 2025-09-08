@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { decrypt } = require('../utils/encryption');
+const imageStorage = require('./imageStorage');
 const logger = require('../utils/logger');
 
 class WordPressPublisher {
@@ -16,6 +17,26 @@ class WordPressPublisher {
       // Decrypt the password
       const decryptedPassword = decrypt(wordpressSite.password_encrypted);
       
+      // Upload featured image if available
+      let featuredImageId = null;
+      if (content.featuredImageUrl) {
+        try {
+          const filename = imageStorage.generateFilename(content.title);
+          const uploadResult = await imageStorage.uploadToWordPress(
+            content.featuredImageUrl, 
+            wordpressSite, 
+            filename
+          );
+          
+          if (uploadResult.success) {
+            featuredImageId = uploadResult.mediaId;
+            logger.info(`Featured image uploaded: ${uploadResult.mediaUrl}`);
+          }
+        } catch (imageError) {
+          logger.warn('Featured image upload failed, continuing without image:', imageError.message);
+        }
+      }
+      
       // Prepare the post data
       const postData = {
         title: content.title,
@@ -24,6 +45,7 @@ class WordPressPublisher {
         format: 'standard',
         categories: [1], // Default category
         tags: content.keywords || [],
+        featured_media: featuredImageId, // WordPress featured image ID
         meta: {
           _featured_image_url: content.featuredImageUrl || '',
           _generated_at: content.generatedAt,

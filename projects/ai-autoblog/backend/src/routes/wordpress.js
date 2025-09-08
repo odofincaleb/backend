@@ -4,6 +4,7 @@ const axios = require('axios');
 const { query } = require('../database/connection');
 const { authenticateToken } = require('../middleware/auth');
 const { encrypt, decrypt } = require('../utils/encryption');
+const imageStorage = require('../services/imageStorage');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -457,6 +458,103 @@ router.post('/sites/:id/test', authenticateToken, async (req, res) => {
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to test WordPress connection'
+    });
+  }
+});
+
+/**
+ * POST /api/wordpress/sites/:id/test-image-upload
+ * Test image upload to WordPress media library
+ */
+router.post('/sites/:id/test-image-upload', authenticateToken, async (req, res) => {
+  try {
+    const siteId = req.params.id;
+    const userId = req.user.id;
+
+    // Get WordPress site
+    const siteResult = await query(
+      'SELECT * FROM wordpress_sites WHERE id = $1 AND user_id = $2',
+      [siteId, userId]
+    );
+
+    if (siteResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'WordPress site not found',
+        message: 'The specified WordPress site does not exist or does not belong to you'
+      });
+    }
+
+    const wordpressSite = siteResult.rows[0];
+
+    // Test image upload with a sample image
+    const testImageUrl = 'https://picsum.photos/800/600'; // Random test image
+    const filename = `test-upload-${Date.now()}.jpg`;
+
+    try {
+      const uploadResult = await imageStorage.uploadToWordPress(
+        testImageUrl,
+        wordpressSite,
+        filename
+      );
+
+      res.json({
+        message: 'Image upload test successful',
+        result: uploadResult
+      });
+
+    } catch (uploadError) {
+      res.status(400).json({
+        error: 'Image upload test failed',
+        message: uploadError.message
+      });
+    }
+
+  } catch (error) {
+    logger.error('Test image upload error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to test image upload'
+    });
+  }
+});
+
+/**
+ * GET /api/wordpress/sites/:id/media-info
+ * Get WordPress media library information
+ */
+router.get('/sites/:id/media-info', authenticateToken, async (req, res) => {
+  try {
+    const siteId = req.params.id;
+    const userId = req.user.id;
+
+    // Get WordPress site
+    const siteResult = await query(
+      'SELECT * FROM wordpress_sites WHERE id = $1 AND user_id = $2',
+      [siteId, userId]
+    );
+
+    if (siteResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'WordPress site not found',
+        message: 'The specified WordPress site does not exist or does not belong to you'
+      });
+    }
+
+    const wordpressSite = siteResult.rows[0];
+
+    // Get media library info
+    const mediaInfo = await imageStorage.getMediaLibraryInfo(wordpressSite);
+
+    res.json({
+      message: 'Media library info retrieved successfully',
+      mediaInfo
+    });
+
+  } catch (error) {
+    logger.error('Get media info error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to get media library information'
     });
   }
 });

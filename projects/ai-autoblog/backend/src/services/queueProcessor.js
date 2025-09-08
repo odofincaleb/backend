@@ -123,6 +123,7 @@ class QueueProcessor {
           if (imageUrl) {
             await this.updateQueueImage(queueId, imageUrl);
             generatedContent.featuredImageUrl = imageUrl;
+            logger.info(`Featured image generated: ${imageUrl}`);
           }
         } catch (imageError) {
           logger.warn('Image generation failed, continuing without image:', imageError.message);
