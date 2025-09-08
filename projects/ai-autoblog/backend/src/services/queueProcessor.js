@@ -137,7 +137,7 @@ class QueueProcessor {
       await this.updateQueuePublishing(queueId, publishResult);
 
       // Update campaign's next publish time
-      await this.updateCampaignSchedule(campaign.id, campaign.schedule);
+      await this.updateCampaignSchedule(campaign.id, campaign.schedule, campaign.schedule_hours);
 
       // Log success
       await this.logCampaignEvent(campaign.id, 'content_published', 
@@ -258,10 +258,19 @@ class QueueProcessor {
   /**
    * Update campaign's next publish time
    */
-  async updateCampaignSchedule(campaignId, schedule) {
+  async updateCampaignSchedule(campaignId, schedule, scheduleHours) {
     try {
-      const scheduleHours = parseInt(schedule.replace('h', ''));
-      const nextPublishAt = new Date(Date.now() + scheduleHours * 60 * 60 * 1000);
+      let finalScheduleHours;
+      
+      if (scheduleHours !== undefined && scheduleHours !== null) {
+        // Use the custom schedule_hours field
+        finalScheduleHours = scheduleHours;
+      } else {
+        // Fallback to legacy schedule format
+        finalScheduleHours = parseInt(schedule.replace('h', ''));
+      }
+      
+      const nextPublishAt = new Date(Date.now() + finalScheduleHours * 60 * 60 * 1000);
 
       await query(`
         UPDATE campaigns 

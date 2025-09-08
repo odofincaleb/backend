@@ -13,8 +13,17 @@ const createCampaignSchema = Joi.object({
   toneOfVoice: Joi.string().valid('conversational', 'formal', 'humorous', 'storytelling').default('conversational'),
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle').default('pas'),
   imperfectionList: Joi.array().items(Joi.string()).default([]),
-  schedule: Joi.string().valid('24h', '48h', '72h').default('24h'),
+  schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
+  scheduleHours: Joi.number().min(0.1).max(168).precision(2).optional(), // New custom hours field
   wordpressSiteId: Joi.string().uuid().optional()
+}).custom((value, helpers) => {
+  // Ensure at least one schedule option is provided
+  if (!value.schedule && !value.scheduleHours) {
+    return helpers.error('custom.scheduleRequired');
+  }
+  return value;
+}, 'Schedule validation').messages({
+  'custom.scheduleRequired': 'Either schedule or scheduleHours must be provided'
 });
 
 const updateCampaignSchema = Joi.object({
@@ -23,7 +32,8 @@ const updateCampaignSchema = Joi.object({
   toneOfVoice: Joi.string().valid('conversational', 'formal', 'humorous', 'storytelling'),
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle'),
   imperfectionList: Joi.array().items(Joi.string()),
-  schedule: Joi.string().valid('24h', '48h', '72h'),
+  schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
+  scheduleHours: Joi.number().min(0.1).max(168).precision(2).optional(), // New custom hours field
   wordpressSiteId: Joi.string().uuid().optional(),
   status: Joi.string().valid('active', 'paused', 'completed', 'error')
 });
@@ -38,7 +48,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
     const result = await query(
       `SELECT c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
-              c.imperfection_list, c.schedule, c.status, c.next_publish_at,
+              c.imperfection_list, c.schedule, c.schedule_hours, c.status, c.next_publish_at,
               c.created_at, c.updated_at,
               ws.site_name, ws.site_url,
               COUNT(cq.id) as posts_published
@@ -59,6 +69,7 @@ router.get('/', authenticateToken, async (req, res) => {
       writingStyle: campaign.writing_style,
       imperfectionList: campaign.imperfection_list,
       schedule: campaign.schedule,
+      scheduleHours: campaign.schedule_hours,
       status: campaign.status,
       nextPublishAt: campaign.next_publish_at,
       wordpressSite: campaign.site_name ? {
@@ -161,6 +172,7 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
       writingStyle,
       imperfectionList,
       schedule,
+      scheduleHours,
       wordpressSiteId
     } = value;
 
@@ -178,21 +190,33 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
       }
     }
 
-    // Calculate next publish time
-    const scheduleHours = parseInt(schedule.replace('h', ''));
-    const nextPublishAt = new Date(Date.now() + scheduleHours * 60 * 60 * 1000);
+    // Calculate next publish time and determine schedule values
+    let finalScheduleHours;
+    let finalSchedule;
+    
+    if (scheduleHours !== undefined) {
+      // Use custom hours
+      finalScheduleHours = scheduleHours;
+      finalSchedule = `${scheduleHours}h`; // For backward compatibility
+    } else {
+      // Use legacy schedule format
+      finalScheduleHours = parseInt(schedule.replace('h', ''));
+      finalSchedule = schedule;
+    }
+    
+    const nextPublishAt = new Date(Date.now() + finalScheduleHours * 60 * 60 * 1000);
 
     // Create campaign
     const result = await query(
       `INSERT INTO campaigns (
         user_id, topic, context, tone_of_voice, writing_style, 
-        imperfection_list, schedule, wordpress_site_id, next_publish_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        imperfection_list, schedule, schedule_hours, wordpress_site_id, next_publish_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id, topic, context, tone_of_voice, writing_style, 
-                imperfection_list, schedule, status, next_publish_at, created_at`,
+                imperfection_list, schedule, schedule_hours, status, next_publish_at, created_at`,
       [
         userId, topic, context, toneOfVoice, writingStyle,
-        JSON.stringify(imperfectionList), schedule, wordpressSiteId, nextPublishAt
+        JSON.stringify(imperfectionList), finalSchedule, finalScheduleHours, wordpressSiteId, nextPublishAt
       ]
     );
 
