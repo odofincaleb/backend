@@ -418,10 +418,10 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     const campaignId = req.params.id;
 
-    // Update campaign status to active
+    // Update campaign status to active and set next_publish_at to now for immediate processing
     const result = await query(
       `UPDATE campaigns 
-       SET status = 'active', updated_at = CURRENT_TIMESTAMP 
+       SET status = 'active', next_publish_at = NOW(), updated_at = CURRENT_TIMESTAMP 
        WHERE id = $1 AND user_id = $2
        RETURNING *`,
       [campaignId, userId]
@@ -436,14 +436,14 @@ router.post('/:id/start', authenticateToken, async (req, res) => {
     // Log campaign start
     await query(
       `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
-       VALUES ($1, $2, 'campaign_started', 'Campaign started', 'info')`,
+       VALUES ($1, $2, 'campaign_started', 'Campaign started and scheduled for immediate processing', 'info')`,
       [userId, campaignId]
     );
 
-    logger.info('Campaign started:', { userId, campaignId });
+    logger.info('Campaign started with immediate processing:', { userId, campaignId });
 
     res.json({
-      message: 'Campaign started successfully'
+      message: 'Campaign started successfully and scheduled for immediate processing'
     });
 
   } catch (error) {
