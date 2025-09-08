@@ -17,7 +17,9 @@ const Spinner = styled.div`
   animation: ${spin} 1s ease-in-out infinite;
 `;
 
-const Container = styled.div`
+const Container = styled.div.withConfig({
+  shouldForwardProp: (prop) => !['fullScreen', 'padding'].includes(prop),
+})`
   display: flex;
   align-items: center;
   justify-content: center;
