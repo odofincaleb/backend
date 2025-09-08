@@ -46,20 +46,44 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const result = await query(
-      `SELECT c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
-              c.imperfection_list, c.schedule, c.schedule_hours, c.status, c.next_publish_at,
-              c.created_at, c.updated_at,
-              ws.site_name, ws.site_url,
-              COUNT(cq.id) as posts_published
-       FROM campaigns c
-       LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
-       LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
-       WHERE c.user_id = $1
-       GROUP BY c.id, ws.site_name, ws.site_url
-       ORDER BY c.created_at DESC`,
-      [userId]
-    );
+    let result;
+    try {
+      // Try with schedule_hours column first (after migration)
+      result = await query(
+        `SELECT c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
+                c.imperfection_list, c.schedule, c.schedule_hours, c.status, c.next_publish_at,
+                c.created_at, c.updated_at,
+                ws.site_name, ws.site_url,
+                COUNT(cq.id) as posts_published
+         FROM campaigns c
+         LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
+         LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
+         WHERE c.user_id = $1
+         GROUP BY c.id, ws.site_name, ws.site_url
+         ORDER BY c.created_at DESC`,
+        [userId]
+      );
+    } catch (error) {
+      // Fallback to legacy format if schedule_hours column doesn't exist yet
+      if (error.message.includes('schedule_hours')) {
+        result = await query(
+          `SELECT c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
+                  c.imperfection_list, c.schedule, c.status, c.next_publish_at,
+                  c.created_at, c.updated_at,
+                  ws.site_name, ws.site_url,
+                  COUNT(cq.id) as posts_published
+           FROM campaigns c
+           LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
+           LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
+           WHERE c.user_id = $1
+           GROUP BY c.id, ws.site_name, ws.site_url
+           ORDER BY c.created_at DESC`,
+          [userId]
+        );
+      } else {
+        throw error;
+      }
+    }
 
     const campaigns = result.rows.map(campaign => ({
       id: campaign.id,
@@ -69,7 +93,7 @@ router.get('/', authenticateToken, async (req, res) => {
       writingStyle: campaign.writing_style,
       imperfectionList: campaign.imperfection_list,
       schedule: campaign.schedule,
-      scheduleHours: campaign.schedule_hours,
+      scheduleHours: campaign.schedule_hours || (campaign.schedule ? parseInt(campaign.schedule.replace('h', '')) : 24),
       status: campaign.status,
       nextPublishAt: campaign.next_publish_at,
       wordpressSite: campaign.site_name ? {
@@ -207,18 +231,40 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
     const nextPublishAt = new Date(Date.now() + finalScheduleHours * 60 * 60 * 1000);
 
     // Create campaign
-    const result = await query(
-      `INSERT INTO campaigns (
-        user_id, topic, context, tone_of_voice, writing_style, 
-        imperfection_list, schedule, schedule_hours, wordpress_site_id, next_publish_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING id, topic, context, tone_of_voice, writing_style, 
-                imperfection_list, schedule, schedule_hours, status, next_publish_at, created_at`,
-      [
-        userId, topic, context, toneOfVoice, writingStyle,
-        JSON.stringify(imperfectionList), finalSchedule, finalScheduleHours, wordpressSiteId, nextPublishAt
-      ]
-    );
+    let result;
+    try {
+      // Try with schedule_hours column first (after migration)
+      result = await query(
+        `INSERT INTO campaigns (
+          user_id, topic, context, tone_of_voice, writing_style, 
+          imperfection_list, schedule, schedule_hours, wordpress_site_id, next_publish_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING id, topic, context, tone_of_voice, writing_style, 
+                  imperfection_list, schedule, schedule_hours, status, next_publish_at, created_at`,
+        [
+          userId, topic, context, toneOfVoice, writingStyle,
+          JSON.stringify(imperfectionList), finalSchedule, finalScheduleHours, wordpressSiteId, nextPublishAt
+        ]
+      );
+    } catch (error) {
+      // Fallback to legacy format if schedule_hours column doesn't exist yet
+      if (error.message.includes('schedule_hours')) {
+        result = await query(
+          `INSERT INTO campaigns (
+            user_id, topic, context, tone_of_voice, writing_style, 
+            imperfection_list, schedule, wordpress_site_id, next_publish_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          RETURNING id, topic, context, tone_of_voice, writing_style, 
+                    imperfection_list, schedule, status, next_publish_at, created_at`,
+          [
+            userId, topic, context, toneOfVoice, writingStyle,
+            JSON.stringify(imperfectionList), finalSchedule, wordpressSiteId, nextPublishAt
+          ]
+        );
+      } else {
+        throw error;
+      }
+    }
 
     const campaign = result.rows[0];
 
