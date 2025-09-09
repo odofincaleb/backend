@@ -39,7 +39,7 @@ const ContentTypeCard = styled(Card)`
   cursor: pointer;
   transition: all 0.2s ease;
   border: 2px solid ${props => props.selected ? props.theme.colors.primary : props.theme.colors.border};
-  background: ${props => props.selected ? props.theme.colors.primary}10 : props.theme.colors.surface};
+  background: ${props => props.selected ? `${props.theme.colors.primary}10` : props.theme.colors.surface};
 
   &:hover {
     border-color: ${props => props.theme.colors.primary};
@@ -87,8 +87,8 @@ const SelectionInfo = styled.div`
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  background: ${props => props.theme.colors.info}20;
-  border: 1px solid ${props => props.theme.colors.info}40;
+  background: ${props => `${props.theme.colors.info}20`};
+  border: 1px solid ${props => `${props.theme.colors.info}40`};
   border-radius: 6px;
   margin-bottom: 1rem;
 `;
