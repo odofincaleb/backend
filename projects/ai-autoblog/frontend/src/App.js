@@ -7,6 +7,7 @@ import Register from './pages/Auth/Register';
 import Dashboard from './pages/Dashboard/Dashboard';
 import Campaigns from './pages/Campaigns/Campaigns';
 import CreateCampaign from './pages/Campaigns/CreateCampaign';
+import TitleQueue from './pages/TitleQueue/TitleQueue';
 import WordPressSites from './pages/WordPress/WordPressSites';
 import Settings from './pages/Settings/Settings';
 import License from './pages/License/License';
@@ -43,6 +44,7 @@ function App() {
                 <Route path="/campaigns" element={<Campaigns />} />
                 <Route path="/campaigns/create" element={<CreateCampaign />} />
                 <Route path="/campaigns/:id" element={<CreateCampaign />} />
+                <Route path="/title-queue/:campaignId" element={<TitleQueue />} />
                 <Route path="/wordpress" element={<WordPressSites />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/license" element={<License />} />

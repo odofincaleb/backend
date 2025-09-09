@@ -64,6 +64,7 @@ export const campaignsAPI = {
   startCampaign: (id) => api.post(`/campaigns/${id}/start`),
   stopCampaign: (id) => api.post(`/campaigns/${id}/stop`),
   getCampaignStats: (id) => api.get(`/campaigns/${id}/stats`),
+  getContentTypes: () => api.get('/campaigns/content-types'),
 };
 
 // WordPress API

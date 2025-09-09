@@ -3,6 +3,7 @@ const Joi = require('joi');
 const { query } = require('../database/connection');
 const { authenticateToken, checkCampaignLimit } = require('../middleware/auth');
 const logger = require('../utils/logger');
+const contentTypeTemplates = require('../services/contentTypeTemplates');
 
 const router = express.Router();
 
@@ -15,15 +16,27 @@ const createCampaignSchema = Joi.object({
   imperfectionList: Joi.array().items(Joi.string()).default([]),
   schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
   scheduleHours: Joi.number().min(0.1).max(168).precision(2).optional(), // New custom hours field
-  wordpressSiteId: Joi.string().uuid().optional()
+  wordpressSiteId: Joi.string().uuid().optional(),
+  contentTypes: Joi.array().items(Joi.string()).max(5).optional(),
+  contentTypeVariables: Joi.object().optional()
 }).custom((value, helpers) => {
   // Ensure at least one schedule option is provided
   if (!value.schedule && (value.scheduleHours === undefined || value.scheduleHours === null)) {
     return helpers.error('custom.scheduleRequired');
   }
+  
+  // Validate content types if provided
+  if (value.contentTypes) {
+    const validation = contentTypeTemplates.validateContentTypes(value.contentTypes);
+    if (!validation.valid) {
+      return helpers.error('custom.contentTypesInvalid', { message: validation.error });
+    }
+  }
+  
   return value;
-}, 'Schedule validation').messages({
-  'custom.scheduleRequired': 'Either schedule or scheduleHours must be provided'
+}, 'Campaign validation').messages({
+  'custom.scheduleRequired': 'Either schedule or scheduleHours must be provided',
+  'custom.contentTypesInvalid': 'Content types validation failed: {#message}'
 });
 
 const updateCampaignSchema = Joi.object({
@@ -35,7 +48,39 @@ const updateCampaignSchema = Joi.object({
   schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
   scheduleHours: Joi.number().min(0.1).max(168).precision(2).optional(), // New custom hours field
   wordpressSiteId: Joi.string().uuid().optional(),
-  status: Joi.string().valid('active', 'paused', 'completed', 'error')
+  status: Joi.string().valid('active', 'paused', 'completed', 'error'),
+  contentTypes: Joi.array().items(Joi.string()).max(5).optional(),
+  contentTypeVariables: Joi.object().optional()
+}).custom((value, helpers) => {
+  // Validate content types if provided
+  if (value.contentTypes) {
+    const validation = contentTypeTemplates.validateContentTypes(value.contentTypes);
+    if (!validation.valid) {
+      return helpers.error('custom.contentTypesInvalid', { message: validation.error });
+    }
+  }
+  return value;
+}, 'Campaign validation').messages({
+  'custom.contentTypesInvalid': 'Content types validation failed: {#message}'
+});
+
+/**
+ * GET /api/campaigns/content-types
+ * Get all available content types
+ */
+router.get('/content-types', authenticateToken, async (req, res) => {
+  try {
+    const contentTypes = contentTypeTemplates.getAllContentTypes();
+    res.json({
+      contentTypes
+    });
+  } catch (error) {
+    logger.error('Get content types error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to get content types'
+    });
+  }
 });
 
 /**
@@ -48,11 +93,11 @@ router.get('/', authenticateToken, async (req, res) => {
 
     let result;
     try {
-      // Try with schedule_hours column first (after migration)
+      // Try with all new columns first (after migration)
       result = await query(
         `SELECT c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
                 c.imperfection_list, c.schedule, c.schedule_hours, c.status, c.next_publish_at,
-                c.created_at, c.updated_at,
+                c.created_at, c.updated_at, c.content_types, c.content_type_variables,
                 ws.site_name, ws.site_url,
                 COUNT(cq.id) as posts_published,
                 COUNT(tq.id) as titles_in_queue,
@@ -67,25 +112,25 @@ router.get('/', authenticateToken, async (req, res) => {
         [userId]
       );
     } catch (error) {
-      // Fallback to legacy format if schedule_hours column doesn't exist yet
-      if (error.message.includes('schedule_hours')) {
+      // Fallback to legacy format if new columns don't exist yet
+      if (error.message.includes('schedule_hours') || error.message.includes('content_types')) {
         result = await query(
-          `SELECT c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
-                  c.imperfection_list, c.schedule, c.status, c.next_publish_at,
-                  c.created_at, c.updated_at,
-                  ws.site_name, ws.site_url,
+      `SELECT c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
+              c.imperfection_list, c.schedule, c.status, c.next_publish_at,
+              c.created_at, c.updated_at,
+              ws.site_name, ws.site_url,
                   COUNT(cq.id) as posts_published,
                   COUNT(tq.id) as titles_in_queue,
                   COUNT(CASE WHEN tq.status = 'approved' THEN 1 END) as approved_titles
-           FROM campaigns c
-           LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
-           LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
+       FROM campaigns c
+       LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
+       LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
            LEFT JOIN title_queue tq ON c.id = tq.campaign_id
-           WHERE c.user_id = $1
-           GROUP BY c.id, ws.site_name, ws.site_url
-           ORDER BY c.created_at DESC`,
-          [userId]
-        );
+       WHERE c.user_id = $1
+       GROUP BY c.id, ws.site_name, ws.site_url
+       ORDER BY c.created_at DESC`,
+      [userId]
+    );
       } else {
         throw error;
       }
@@ -109,6 +154,8 @@ router.get('/', authenticateToken, async (req, res) => {
       postsPublished: parseInt(campaign.posts_published),
       titlesInQueue: parseInt(campaign.titles_in_queue),
       approvedTitles: parseInt(campaign.approved_titles),
+      contentTypes: campaign.content_types || Object.keys(contentTypeTemplates.getAllContentTypes()),
+      contentTypeVariables: campaign.content_type_variables || {},
       createdAt: campaign.created_at,
       updatedAt: campaign.updated_at
     }));
@@ -206,7 +253,9 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
       imperfectionList,
       schedule,
       scheduleHours,
-      wordpressSiteId
+      wordpressSiteId,
+      contentTypes,
+      contentTypeVariables
     } = value;
 
     // Validate WordPress site if provided
@@ -237,39 +286,51 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
       finalSchedule = schedule;
     }
     
+    // Set default content types if none provided (all 15 types)
+    let finalContentTypes = contentTypes;
+    if (!finalContentTypes || finalContentTypes.length === 0) {
+      finalContentTypes = Object.keys(contentTypeTemplates.getAllContentTypes());
+    }
+    
+    // Set default content type variables if none provided
+    let finalContentTypeVariables = contentTypeVariables || {};
+    
     const nextPublishAt = new Date(Date.now() + finalScheduleHours * 60 * 60 * 1000);
 
     // Create campaign
     let result;
     try {
-      // Try with schedule_hours column first (after migration)
+      // Try with all new columns first (after migration)
       result = await query(
         `INSERT INTO campaigns (
           user_id, topic, context, tone_of_voice, writing_style, 
-          imperfection_list, schedule, schedule_hours, wordpress_site_id, next_publish_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          imperfection_list, schedule, schedule_hours, wordpress_site_id, next_publish_at,
+          content_types, content_type_variables
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING id, topic, context, tone_of_voice, writing_style, 
-                  imperfection_list, schedule, schedule_hours, status, next_publish_at, created_at`,
+                  imperfection_list, schedule, schedule_hours, status, next_publish_at, created_at,
+                  content_types, content_type_variables`,
         [
           userId, topic, context, toneOfVoice, writingStyle,
-          JSON.stringify(imperfectionList), finalSchedule, finalScheduleHours, wordpressSiteId, nextPublishAt
+          JSON.stringify(imperfectionList), finalSchedule, finalScheduleHours, wordpressSiteId, nextPublishAt,
+          JSON.stringify(finalContentTypes), JSON.stringify(finalContentTypeVariables)
         ]
       );
     } catch (error) {
-      // Fallback to legacy format if schedule_hours column doesn't exist yet
-      if (error.message.includes('schedule_hours')) {
+      // Fallback to legacy format if new columns don't exist yet
+      if (error.message.includes('schedule_hours') || error.message.includes('content_types')) {
         result = await query(
-          `INSERT INTO campaigns (
-            user_id, topic, context, tone_of_voice, writing_style, 
-            imperfection_list, schedule, wordpress_site_id, next_publish_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          RETURNING id, topic, context, tone_of_voice, writing_style, 
-                    imperfection_list, schedule, status, next_publish_at, created_at`,
-          [
-            userId, topic, context, toneOfVoice, writingStyle,
+      `INSERT INTO campaigns (
+        user_id, topic, context, tone_of_voice, writing_style, 
+        imperfection_list, schedule, wordpress_site_id, next_publish_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id, topic, context, tone_of_voice, writing_style, 
+                imperfection_list, schedule, status, next_publish_at, created_at`,
+      [
+        userId, topic, context, toneOfVoice, writingStyle,
             JSON.stringify(imperfectionList), finalSchedule, wordpressSiteId, nextPublishAt
-          ]
-        );
+      ]
+    );
       } else {
         throw error;
       }

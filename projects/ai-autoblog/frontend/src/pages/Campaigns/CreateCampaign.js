@@ -6,6 +6,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { campaignsAPI, wordpressAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 import { useForm } from 'react-hook-form';
+import ContentTypeSelector from '../../components/ContentTypes/ContentTypeSelector';
 
 const CreateCampaignContainer = styled.div`
   max-width: 800px;
@@ -84,6 +85,9 @@ const CreateCampaign = () => {
   const [loading, setLoading] = useState(false);
   const [wordpressSites, setWordpressSites] = useState([]);
   const [imperfectionList, setImperfectionList] = useState([]);
+  const [contentTypes, setContentTypes] = useState({});
+  const [selectedContentTypes, setSelectedContentTypes] = useState([]);
+  const [contentTypeVariables, setContentTypeVariables] = useState({});
 
   const {
     register,
@@ -97,7 +101,7 @@ const CreateCampaign = () => {
       context: '',
       tone_of_voice: 'conversational',
       writing_style: 'pas',
-      schedule: '24h',
+      scheduleHours: 24,
       wordpress_site_id: '',
       imperfection_list: []
     }
@@ -105,6 +109,7 @@ const CreateCampaign = () => {
 
   useEffect(() => {
     fetchWordpressSites();
+    fetchContentTypes();
     if (isEditing) {
       fetchCampaign();
     }
@@ -120,6 +125,15 @@ const CreateCampaign = () => {
     }
   };
 
+  const fetchContentTypes = async () => {
+    try {
+      const response = await campaignsAPI.getContentTypes();
+      setContentTypes(response.data.contentTypes || {});
+    } catch (error) {
+      console.error('Error fetching content types:', error);
+    }
+  };
+
   const fetchCampaign = async () => {
     try {
       setLoading(true);
@@ -132,7 +146,7 @@ const CreateCampaign = () => {
         context: campaign.context,
         tone_of_voice: campaign.toneOfVoice,
         writing_style: campaign.writingStyle,
-        schedule: campaign.schedule,
+        scheduleHours: campaign.scheduleHours || 24,
         wordpress_site_id: campaign.wordpressSite?.id || '',
         imperfection_list: campaign.imperfectionList || []
       };
@@ -140,6 +154,10 @@ const CreateCampaign = () => {
       Object.keys(formData).forEach(key => {
         setValue(key, formData[key]);
       });
+
+      // Set content types and variables
+      setSelectedContentTypes(campaign.contentTypes || []);
+      setContentTypeVariables(campaign.contentTypeVariables || {});
       setImperfectionList(formData.imperfection_list);
     } catch (error) {
       toast.error('Failed to fetch campaign');
@@ -170,9 +188,11 @@ const CreateCampaign = () => {
         context: data.context,
         toneOfVoice: data.tone_of_voice,
         writingStyle: data.writing_style,
-        schedule: data.schedule,
+        scheduleHours: parseFloat(data.scheduleHours),
         wordpressSiteId: data.wordpress_site_id || null,
-        imperfectionList: imperfectionList
+        imperfectionList: imperfectionList,
+        contentTypes: selectedContentTypes,
+        contentTypeVariables: contentTypeVariables
       };
 
       if (isEditing) {
@@ -259,12 +279,24 @@ const CreateCampaign = () => {
 
         <FormRow>
           <FormGroup>
-            <Label htmlFor="schedule">Publishing Schedule</Label>
-            <Select id="schedule" {...register('schedule')}>
-              <option value="24h">Every 24 hours</option>
-              <option value="48h">Every 48 hours</option>
-              <option value="72h">Every 72 hours</option>
-            </Select>
+            <Label htmlFor="scheduleHours">Publishing Schedule (Hours)</Label>
+            <Input
+              id="scheduleHours"
+              type="number"
+              step="0.1"
+              min="0.1"
+              max="168"
+              placeholder="e.g., 0.5, 1, 2, 6, 24"
+              {...register('scheduleHours', { 
+                required: 'Schedule is required',
+                min: { value: 0.1, message: 'Minimum is 0.1 hours (6 minutes)' },
+                max: { value: 168, message: 'Maximum is 168 hours (1 week)' }
+              })}
+            />
+            {errors.scheduleHours && <ErrorMessage>{errors.scheduleHours.message}</ErrorMessage>}
+            <p style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '0.5rem' }}>
+              Enter the number of hours between posts (e.g., 0.5 for 30 minutes, 1 for 1 hour, 24 for daily)
+            </p>
           </FormGroup>
 
           <FormGroup>
@@ -283,6 +315,14 @@ const CreateCampaign = () => {
             {errors.wordpress_site_id && <ErrorMessage>{errors.wordpress_site_id.message}</ErrorMessage>}
           </FormGroup>
         </FormRow>
+
+        <ContentTypeSelector
+          selectedTypes={selectedContentTypes}
+          onTypesChange={setSelectedContentTypes}
+          variables={contentTypeVariables}
+          onVariablesChange={setContentTypeVariables}
+          availableTypes={contentTypes}
+        />
 
         <FormGroup>
           <Label>Imperfection List</Label>

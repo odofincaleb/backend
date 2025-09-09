@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { Plus, Target, Play, Pause, Settings, Trash2, Edit, Calendar, Globe } from 'lucide-react';
+import { Plus, Target, Play, Pause, Settings, Trash2, Edit, Calendar, Globe, FileText } from 'lucide-react';
 import { Card, Button, Badge } from '../../styles/GlobalStyles';
 import { Link, useNavigate } from 'react-router-dom';
 import { campaignsAPI } from '../../services/api';
@@ -269,11 +269,20 @@ const Campaigns = () => {
 
               <CampaignStats>
                 <span><Target size={12} /> {campaign.postsPublished || 0} posts</span>
+                <span><FileText size={12} /> {campaign.titlesInQueue || 0} titles</span>
                 <span><Calendar size={12} /> Next: {formatNextPublish(campaign.nextPublishAt)}</span>
                 <span><Globe size={12} /> {campaign.wordpressSite?.name || 'No site'}</span>
               </CampaignStats>
 
               <CampaignActions>
+                <Button 
+                  size="small" 
+                  variant="ghost"
+                  onClick={() => navigate(`/title-queue/${campaign.id}`)}
+                  title="Manage Title Queue"
+                >
+                  <FileText size={16} />
+                </Button>
                 <Button 
                   size="small" 
                   variant="ghost"

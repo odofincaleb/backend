@@ -1,5 +1,6 @@
 const OpenAI = require('openai');
 const logger = require('../utils/logger');
+const contentTypeTemplates = require('./contentTypeTemplates');
 
 class ContentGenerator {
   constructor() {
@@ -129,8 +130,16 @@ Return the titles as a numbered list (1. Title here, 2. Title here, etc.)`;
 
       logger.info(`Generating content for campaign: ${campaign.topic}`);
 
-      // Build the prompt based on campaign parameters
-      const prompt = this.buildPrompt(campaign, options);
+      // Select a random content type from the campaign's selected types
+      const selectedContentType = contentTypeTemplates.getRandomContentType(campaign.content_types);
+      logger.info(`Selected content type: ${selectedContentType}`);
+
+      // Build the prompt using the selected content type template
+      const prompt = contentTypeTemplates.buildPrompt(
+        selectedContentType, 
+        campaign.content_type_variables || {}, 
+        campaign
+      );
       
       // Generate content using OpenAI
       const completion = await this.openai.chat.completions.create({
@@ -160,7 +169,7 @@ Return the titles as a numbered list (1. Title here, 2. Title here, etc.)`;
       // Generate featured image prompt
       const imagePrompt = this.generateImagePrompt(campaign.topic, title);
 
-      logger.info(`Successfully generated content for campaign: ${campaign.topic}`);
+      logger.info(`Successfully generated ${selectedContentType} content for campaign: ${campaign.topic}`);
 
       return {
         title,
@@ -168,6 +177,8 @@ Return the titles as a numbered list (1. Title here, 2. Title here, etc.)`;
         keywords,
         imagePrompt,
         wordCount: content.split(' ').length,
+        contentType: selectedContentType,
+        contentTypeName: contentTypeTemplates.getContentType(selectedContentType)?.name || selectedContentType,
         generatedAt: new Date().toISOString()
       };
 
