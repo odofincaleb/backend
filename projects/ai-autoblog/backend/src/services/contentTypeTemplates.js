@@ -153,11 +153,13 @@ class ContentTypeTemplates {
     // Build the prompt by replacing variables
     let prompt = template.prompt;
     
-    // Replace all variables in the prompt
+    // Replace all variables in the prompt (only replace exact matches)
     Object.keys(mergedVariables).forEach(key => {
       const placeholder = `[${key}]`;
       const value = mergedVariables[key] || `[${key}]`; // Keep placeholder if no value
-      prompt = prompt.replace(new RegExp(placeholder, 'g'), value);
+      // Use word boundaries to ensure exact matches
+      const regex = new RegExp(`\\[${key}\\]`, 'g');
+      prompt = prompt.replace(regex, value);
     });
 
     return prompt;
