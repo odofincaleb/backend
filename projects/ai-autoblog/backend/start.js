@@ -4,33 +4,34 @@ const path = require('path');
 async function startApplication() {
   console.log('🚀 Starting Fiddy AutoPublisher Backend...');
 
-  // Run force migrations first
+  // Run regular migrations (preserves existing data)
   try {
     console.log('🔄 Running database migrations...');
-    const { forceCreateTables } = require('./src/database/force-migrate.js');
-    await forceCreateTables();
+    const { migrate } = require('./src/database/migrate.js');
+    await migrate();
     console.log('✅ Database migrations completed');
   } catch (error) {
     console.error('❌ Migration failed:', error.message);
-    console.log('🔄 Trying manual database setup...');
+    console.log('🔄 Trying force migration as fallback...');
     try {
-      require('./manual-setup.js');
-      console.log('✅ Manual database setup completed');
-    } catch (setupError) {
-      console.error('❌ Manual setup also failed:', setupError.message);
+      const { forceCreateTables } = require('./src/database/force-migrate.js');
+      await forceCreateTables();
+      console.log('✅ Force migration completed (data was reset)');
+    } catch (forceError) {
+      console.error('❌ Force migration also failed:', forceError.message);
       // Continue anyway - database might already be set up
     }
   }
 
-  // Run seed data
+  // Run seed data (only if needed)
   try {
-    console.log('🌱 Seeding database...');
+    console.log('🌱 Checking if database seeding is needed...');
     const { seedDatabase } = require('./src/database/seed.js');
     await seedDatabase();
-    console.log('✅ Database seeded');
+    console.log('✅ Database seeding completed');
   } catch (error) {
     console.error('❌ Seeding failed:', error.message);
-    // Continue anyway - seeding might already be run
+    // Continue anyway - seeding might already be run or not needed
   }
 
   // Start the server
