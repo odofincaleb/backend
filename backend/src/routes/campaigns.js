@@ -240,15 +240,21 @@ router.get('/:id', authenticateToken, async (req, res) => {
  */
 router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
   try {
+    logger.info('Creating campaign with data:', req.body);
+    
     // Validate input
     const { error, value } = createCampaignSchema.validate(req.body);
     if (error) {
       logger.error('Campaign validation error:', error);
+      logger.error('Validation error details:', error.details);
       return res.status(400).json({
         error: 'Validation error',
-        message: error.details[0].message
+        message: error.details[0].message,
+        details: error.details
       });
     }
+    
+    logger.info('Campaign validation passed:', value);
 
     const userId = req.user.id;
     const {
@@ -283,14 +289,18 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
     let finalScheduleHours;
     let finalSchedule;
     
+    logger.info('Processing schedule:', { scheduleHours, schedule });
+    
     if (scheduleHours !== undefined) {
       // Use custom hours
       finalScheduleHours = scheduleHours;
       finalSchedule = `${scheduleHours}h`; // For backward compatibility
+      logger.info('Using custom schedule hours:', finalScheduleHours);
     } else {
       // Use legacy schedule format
       finalScheduleHours = parseInt(schedule.replace('h', ''));
       finalSchedule = schedule;
+      logger.info('Using legacy schedule:', finalSchedule);
     }
     
     // Set default content types if none provided (all 15 types)
@@ -303,10 +313,20 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
     let finalContentTypeVariables = contentTypeVariables || {};
     
     const nextPublishAt = new Date(Date.now() + finalScheduleHours * 60 * 60 * 1000);
+    logger.info('Calculated next publish time:', { finalScheduleHours, nextPublishAt });
 
     // Create campaign
     let result;
     try {
+      logger.info('Attempting to insert campaign with new columns');
+      logger.info('Insert values:', {
+        userId, topic, context, toneOfVoice, writingStyle,
+        imperfectionList: JSON.stringify(imperfectionList), 
+        finalSchedule, finalScheduleHours, numberOfTitles, wordpressSiteId, nextPublishAt,
+        finalContentTypes: JSON.stringify(finalContentTypes), 
+        finalContentTypeVariables: JSON.stringify(finalContentTypeVariables)
+      });
+      
       // Try with all new columns first (after migration)
       result = await query(
         `INSERT INTO campaigns (
@@ -323,7 +343,10 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
           JSON.stringify(finalContentTypes), JSON.stringify(finalContentTypeVariables)
         ]
       );
+      logger.info('Campaign inserted successfully with new columns');
     } catch (error) {
+      logger.error('Failed to insert with new columns:', error);
+      logger.error('Error details:', error.message);
       // Fallback to legacy format if new columns don't exist yet
       if (error.message.includes('schedule_hours') || error.message.includes('content_types') || error.message.includes('title_queue')) {
         result = await query(
@@ -420,10 +443,12 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
 
   } catch (error) {
     logger.error('Create campaign error:', error);
+    logger.error('Error stack:', error.stack);
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to create campaign',
-      details: error.message
+      details: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
