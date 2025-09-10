@@ -585,6 +585,18 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Log campaign deletion (before deleting the campaign)
+    try {
+      await query(
+        `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
+         VALUES ($1, $2, 'campaign_deleted', 'Campaign deleted', 'info')`,
+        [userId, campaignId]
+      );
+      logger.info('Logged campaign deletion');
+    } catch (error) {
+      logger.warn('Error logging campaign deletion:', error.message);
+    }
+
     // Delete campaign and related data
     // Use a transaction to ensure atomicity
     await query('BEGIN');
@@ -599,7 +611,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
         logger.warn('title_queue table might not exist, continuing with campaign deletion:', error.message);
       }
       
-      // Try to delete from content_queue first to avoid foreign key issues
+      // Try to delete from content_queue with more aggressive approach
       try {
         // First, try to set title_queue_id to NULL to avoid foreign key constraint issues
         await query('UPDATE content_queue SET title_queue_id = NULL WHERE campaign_id = $1', [campaignId]);
@@ -610,6 +622,15 @@ router.delete('/:id', authenticateToken, async (req, res) => {
         logger.info('Deleted from content_queue');
       } catch (error) {
         logger.warn('Error deleting from content_queue:', error.message);
+        // Try to continue anyway - maybe content_queue doesn't exist or has issues
+      }
+      
+      // Try to delete from logs table as well
+      try {
+        await query('DELETE FROM logs WHERE campaign_id = $1', [campaignId]);
+        logger.info('Deleted from logs');
+      } catch (error) {
+        logger.warn('Error deleting from logs:', error.message);
       }
       
       // Finally delete the campaign
@@ -625,13 +646,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       logger.error('Error deleting campaign, transaction rolled back:', error);
       throw error;
     }
-
-    // Log campaign deletion
-    await query(
-      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
-       VALUES ($1, $2, 'campaign_deleted', 'Campaign deleted', 'info')`,
-      [userId, campaignId]
-    );
 
     logger.info('Campaign deleted:', { userId, campaignId });
 
