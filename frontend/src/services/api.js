@@ -1,18 +1,88 @@
 import axios from 'axios';
+import { checkConnection } from './connectionCheck';
+import toast from 'react-hot-toast';
 
-// Create axios instance
+// Create axios instance with retry configuration
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'https://backend-production-8c02.up.railway.app/api',
-  timeout: 60000, // Increased timeout to 60 seconds
+  timeout: 60000, // 60 seconds
   headers: {
     'Content-Type': 'application/json',
   },
+  // Add retry configuration
+  validateStatus: function (status) {
+    // Consider only 5xx errors as failures for retry
+    return status < 500;
+  },
+});
+
+// Add retry interceptor
+api.interceptors.response.use(undefined, async (err) => {
+  const { config, message } = err;
+  if (!config || !config.retry) {
+    return Promise.reject(err);
+  }
+
+  // Set retry count
+  config.__retryCount = config.__retryCount || 0;
+  
+  // Max retries (3 attempts total)
+  if (config.__retryCount >= 2) {
+    return Promise.reject(err);
+  }
+
+  // Increase retry count
+  config.__retryCount += 1;
+
+  // Create new promise to handle backoff
+  const backoff = new Promise((resolve) => {
+    setTimeout(() => {
+      console.log('Retrying request:', config.url);
+      resolve();
+    }, 1000 * Math.pow(2, config.__retryCount)); // Exponential backoff
+  });
+
+  // Return promise to retry request
+  await backoff;
+  return api(config);
 });
 
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and check connection
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    // Check connection before making request
+    const isConnected = await checkConnection();
+    if (!isConnected) {
+      // Show toast only once per disconnection
+      if (!window.__shownDisconnectToast) {
+        toast.error('Connection to server lost. Retrying...', {
+          id: 'connection-lost',
+          duration: 5000
+        });
+        window.__shownDisconnectToast = true;
+      }
+      
+      // Retry the request when connection is restored
+      return new Promise((resolve) => {
+        const checkAndRetry = async () => {
+          const newStatus = await checkConnection();
+          if (newStatus) {
+            window.__shownDisconnectToast = false;
+            toast.success('Connection restored!', {
+              id: 'connection-restored',
+              duration: 3000
+            });
+            resolve(config);
+          } else {
+            setTimeout(checkAndRetry, 5000); // Check every 5 seconds
+          }
+        };
+        checkAndRetry();
+      });
+    }
+
+    // Add auth token
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -29,11 +99,38 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+    // Network errors
+    if (!error.response) {
+      console.error('Network error:', error.message);
+      return Promise.reject({
+        ...error,
+        message: 'Network error. Please check your connection and try again.'
+      });
     }
+
+    // Handle specific status codes
+    switch (error.response.status) {
+      case 401:
+        // Token expired or invalid
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+        break;
+      case 500:
+        console.error('Server error:', error.response.data);
+        return Promise.reject({
+          ...error,
+          message: 'Server error. Please try again in a few moments.'
+        });
+      case 503:
+        console.error('Service unavailable:', error.response.data);
+        return Promise.reject({
+          ...error,
+          message: 'Service temporarily unavailable. Please try again later.'
+        });
+      default:
+        console.error('API error:', error.response.data);
+    }
+
     return Promise.reject(error);
   }
 );

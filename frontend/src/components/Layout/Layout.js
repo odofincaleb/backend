@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import ConnectionStatus from '../ConnectionStatus/ConnectionStatus';
 
 const LayoutContainer = styled.div`
   display: flex;
@@ -56,6 +57,7 @@ const Layout = ({ children }) => {
           {children}
         </ContentArea>
       </MainContent>
+      <ConnectionStatus />
     </LayoutContainer>
   );
 };
