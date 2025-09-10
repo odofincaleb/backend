@@ -301,7 +301,7 @@ router.put('/:titleId/status', authenticateToken, async (req, res) => {
     const campaignId = titleCheck.rows[0].campaign_id;
 
     // Update title status
-    const updateFields = ['status = $1', 'updated_at = CURRENT_TIMESTAMP'];
+    const updateFields = ['status = $1'];
     const updateValues = [status];
 
     if (status === 'approved') {
