@@ -15,7 +15,28 @@ const createCampaignSchema = Joi.object({
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle').default('pas'),
   imperfectionList: Joi.array().items(Joi.string()).default([]),
   schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
-  scheduleHours: Joi.number().min(0.1).max(168).precision(2).optional(), // Custom hours (0.1 to 168, max 2 decimal places)
+  scheduleHours: Joi.number()
+    .min(0.1)
+    .max(168)
+    .precision(2)
+    .custom((value, helpers) => {
+      // Convert to number with 2 decimal places
+      const hours = Number(Number(value).toFixed(2));
+      // Validate the value
+      if (isNaN(hours)) {
+        return helpers.error('number.base');
+      }
+      if (hours < 0.1) {
+        return helpers.error('number.min', { limit: 0.1 });
+      }
+      if (hours > 168) {
+        return helpers.error('number.max', { limit: 168 });
+      }
+      // Return the properly formatted number
+      return hours;
+    }, 'validate schedule hours')
+    .optional()
+    .description('Custom schedule in hours (0.10 to 168.00). Supports fractional hours like 0.10, 0.50, 1.00, etc.'),
   numberOfTitles: Joi.number().min(1).max(20).default(5), // Number of titles to generate
   wordpressSiteId: Joi.string().uuid().optional(),
   contentTypes: Joi.array().items(Joi.string()).max(5).optional(),
@@ -47,7 +68,28 @@ const updateCampaignSchema = Joi.object({
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle'),
   imperfectionList: Joi.array().items(Joi.string()),
   schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
-  scheduleHours: Joi.number().min(0.1).max(168).precision(2).optional(), // Custom hours (0.1 to 168, max 2 decimal places)
+  scheduleHours: Joi.number()
+    .min(0.1)
+    .max(168)
+    .precision(2)
+    .custom((value, helpers) => {
+      // Convert to number with 2 decimal places
+      const hours = Number(Number(value).toFixed(2));
+      // Validate the value
+      if (isNaN(hours)) {
+        return helpers.error('number.base');
+      }
+      if (hours < 0.1) {
+        return helpers.error('number.min', { limit: 0.1 });
+      }
+      if (hours > 168) {
+        return helpers.error('number.max', { limit: 168 });
+      }
+      // Return the properly formatted number
+      return hours;
+    }, 'validate schedule hours')
+    .optional()
+    .description('Custom schedule in hours (0.10 to 168.00). Supports fractional hours like 0.10, 0.50, 1.00, etc.'),
   numberOfTitles: Joi.number().min(1).max(20).optional(), // Number of titles to generate
   wordpressSiteId: Joi.string().uuid().optional(),
   status: Joi.string().valid('active', 'paused', 'completed', 'error'),
@@ -289,18 +331,61 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
     let finalScheduleHours;
     let finalSchedule;
     
-    logger.info('Processing schedule:', { scheduleHours, schedule });
+    logger.info('Processing schedule input:', { 
+      scheduleHours, 
+      schedule,
+      scheduleType: typeof scheduleHours,
+      isNumber: !isNaN(scheduleHours)
+    });
     
     if (scheduleHours !== undefined) {
-      // Use custom hours (ensure 2 decimal places)
-      finalScheduleHours = Number(scheduleHours.toFixed(2));
-      finalSchedule = `${finalScheduleHours}h`; // For backward compatibility
-      logger.info('Using custom schedule hours:', { original: scheduleHours, final: finalScheduleHours });
+      try {
+        // Convert to number and validate
+        const numericHours = Number(scheduleHours);
+        if (isNaN(numericHours)) {
+          throw new Error('Invalid schedule hours: not a number');
+        }
+        if (numericHours < 0.1 || numericHours > 168) {
+          throw new Error(`Invalid schedule hours: ${numericHours} (must be between 0.1 and 168)`);
+        }
+        
+        // Use custom hours (ensure 2 decimal places)
+        finalScheduleHours = Number(numericHours.toFixed(2));
+        finalSchedule = `${finalScheduleHours}h`; // For backward compatibility
+        
+        logger.info('Processed custom schedule hours:', { 
+          input: scheduleHours,
+          numeric: numericHours,
+          final: finalScheduleHours,
+          schedule: finalSchedule
+        });
+      } catch (error) {
+        logger.error('Schedule hours processing error:', error);
+        return res.status(400).json({
+          error: 'Validation error',
+          message: error.message
+        });
+      }
     } else {
       // Use legacy schedule format
-      finalScheduleHours = parseInt(schedule.replace('h', ''));
-      finalSchedule = schedule;
-      logger.info('Using legacy schedule:', { schedule, finalScheduleHours });
+      try {
+        finalScheduleHours = parseInt(schedule.replace('h', ''));
+        if (isNaN(finalScheduleHours)) {
+          throw new Error('Invalid legacy schedule format');
+        }
+        finalSchedule = schedule;
+        logger.info('Processed legacy schedule:', { 
+          input: schedule,
+          hours: finalScheduleHours,
+          schedule: finalSchedule
+        });
+      } catch (error) {
+        logger.error('Legacy schedule processing error:', error);
+        return res.status(400).json({
+          error: 'Validation error',
+          message: 'Invalid schedule format'
+        });
+      }
     }
     
     // Set default content types if none provided (all 15 types)
