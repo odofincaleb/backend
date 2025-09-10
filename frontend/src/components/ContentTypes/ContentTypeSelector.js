@@ -221,7 +221,14 @@ const ContentTypeSelector = ({
         type.variables.forEach(variable => allVariables.add(variable));
       }
     });
-    return Array.from(allVariables);
+    
+    // Filter out variables that are already covered by main campaign form fields
+    const duplicateVariables = ['TOPIC', 'TONE', 'AUDIENCE', 'CONTEXT'];
+    const filteredVariables = Array.from(allVariables).filter(variable => 
+      !duplicateVariables.includes(variable)
+    );
+    
+    return filteredVariables;
   };
 
   return (
@@ -266,7 +273,7 @@ const ContentTypeSelector = ({
           </VariablesHeader>
           
           <VariablesDescription>
-            Customize the variables used in your content generation. These will be used across all selected content types.
+            Customize additional variables for content generation. Variables like TOPIC, TONE, and AUDIENCE are automatically taken from your campaign settings above.
           </VariablesDescription>
 
           <VariablesGrid>

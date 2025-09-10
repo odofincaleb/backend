@@ -205,8 +205,18 @@ const CreateCampaign = () => {
 
       navigate('/campaigns');
     } catch (error) {
-      toast.error(isEditing ? 'Failed to update campaign' : 'Failed to create campaign');
       console.error('Error saving campaign:', error);
+      
+      // Provide more specific error messages
+      if (error.code === 'ERR_NETWORK' || error.message.includes('timeout')) {
+        toast.error('Network timeout. Please check your connection and try again.');
+      } else if (error.response?.status === 500) {
+        toast.error('Server error. Please try again in a few moments.');
+      } else if (error.response?.status === 400) {
+        toast.error('Invalid data. Please check your inputs and try again.');
+      } else {
+        toast.error(isEditing ? 'Failed to update campaign' : 'Failed to create campaign');
+      }
     } finally {
       setLoading(false);
     }
