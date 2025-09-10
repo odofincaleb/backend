@@ -5,6 +5,7 @@ import { Button, Input, Label, FormGroup, ErrorMessage } from '../../styles/Glob
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import api from '../../services/api';
 
 const TitleQueueContainer = styled.div`
   max-width: 1200px;
@@ -201,16 +202,8 @@ const TitleQueue = () => {
 
   const fetchCampaign = async () => {
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setCampaign(data.campaign);
-      }
+      const response = await api.get(`/campaigns/${campaignId}`);
+      setCampaign(response.data.campaign);
     } catch (error) {
       console.error('Error fetching campaign:', error);
       toast.error('Failed to fetch campaign details');
@@ -220,18 +213,8 @@ const TitleQueue = () => {
   const fetchTitles = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/title-queue/${campaignId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setTitles(data.titles);
-      } else {
-        toast.error('Failed to fetch titles');
-      }
+      const response = await api.get(`/title-queue/${campaignId}`);
+      setTitles(response.data.titles);
     } catch (error) {
       console.error('Error fetching titles:', error);
       toast.error('Failed to fetch titles');
@@ -243,23 +226,9 @@ const TitleQueue = () => {
   const generateTitles = async () => {
     try {
       setGenerating(true);
-      const response = await fetch(`/api/title-queue/${campaignId}/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ count: 5 })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        toast.success(`Generated ${data.titles.length} new titles`);
-        fetchTitles(); // Refresh the list
-      } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to generate titles');
-      }
+      const response = await api.post(`/title-queue/${campaignId}/generate`, { count: 5 });
+      toast.success(`Generated ${response.data.titles.length} new titles`);
+      fetchTitles(); // Refresh the list
     } catch (error) {
       console.error('Error generating titles:', error);
       toast.error('Failed to generate titles');
@@ -274,26 +243,13 @@ const TitleQueue = () => {
 
     try {
       setAddingTitle(true);
-      const response = await fetch('/api/title-queue', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          campaignId,
-          title: newTitle.trim()
-        })
+      const response = await api.post(`/title-queue/${campaignId}`, {
+        title: newTitle.trim()
       });
       
-      if (response.ok) {
-        toast.success('Title added successfully');
-        setNewTitle('');
-        fetchTitles(); // Refresh the list
-      } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to add title');
-      }
+      toast.success('Title added successfully');
+      setNewTitle('');
+      fetchTitles(); // Refresh the list
     } catch (error) {
       console.error('Error adding title:', error);
       toast.error('Failed to add title');
@@ -304,22 +260,9 @@ const TitleQueue = () => {
 
   const updateTitleStatus = async (titleId, status) => {
     try {
-      const response = await fetch(`/api/title-queue/${titleId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ status })
-      });
-      
-      if (response.ok) {
-        toast.success(`Title ${status} successfully`);
-        fetchTitles(); // Refresh the list
-      } else {
-        const error = await response.json();
-        toast.error(error.message || `Failed to ${status} title`);
-      }
+      const response = await api.put(`/title-queue/${titleId}/status`, { status });
+      toast.success(`Title ${status} successfully`);
+      fetchTitles(); // Refresh the list
     } catch (error) {
       console.error(`Error ${status}ing title:`, error);
       toast.error(`Failed to ${status} title`);
@@ -330,20 +273,9 @@ const TitleQueue = () => {
     if (!window.confirm('Are you sure you want to delete this title?')) return;
 
     try {
-      const response = await fetch(`/api/title-queue/${titleId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (response.ok) {
-        toast.success('Title deleted successfully');
-        fetchTitles(); // Refresh the list
-      } else {
-        const error = await response.json();
-        toast.error(error.message || 'Failed to delete title');
-      }
+      await api.delete(`/title-queue/${titleId}`);
+      toast.success('Title deleted successfully');
+      fetchTitles(); // Refresh the list
     } catch (error) {
       console.error('Error deleting title:', error);
       toast.error('Failed to delete title');
