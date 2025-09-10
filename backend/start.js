@@ -12,21 +12,16 @@ async function startApplication() {
     console.log('✅ Database migrations completed');
   } catch (error) {
     console.error('❌ Migration failed:', error.message);
-    console.log('🔄 Trying force migration as fallback...');
-    try {
-      const { forceCreateTables } = require('./src/database/force-migrate.js');
-      await forceCreateTables();
-      console.log('✅ Force migration completed (data was reset)');
-    } catch (forceError) {
-      console.error('❌ Force migration also failed:', forceError.message);
-      // Continue anyway - database might already be set up
-    }
+    console.log('⚠️  Skipping force migration to preserve existing data');
+    console.log('🔄 Database might already be set up, continuing...');
+    // Don't run force migration as it deletes all data!
   }
 
   // Add missing columns to existing database
   try {
     console.log('🔄 Adding missing columns...');
-    require('./add-missing-columns.js');
+    const addMissingColumns = require('./add-missing-columns.js');
+    await addMissingColumns();
     console.log('✅ Missing columns added');
   } catch (error) {
     console.error('❌ Adding columns failed:', error.message);
