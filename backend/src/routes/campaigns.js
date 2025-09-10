@@ -351,7 +351,8 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
         
         // Use custom hours (ensure 2 decimal places)
         finalScheduleHours = Number(numericHours.toFixed(2));
-        finalSchedule = `${finalScheduleHours}h`; // For backward compatibility
+        // Format with exactly 2 decimal places
+        finalSchedule = finalScheduleHours.toFixed(2) + 'h';
         
         logger.info('Processed custom schedule hours:', { 
           input: scheduleHours,
@@ -369,14 +370,17 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
     } else {
       // Use legacy schedule format
       try {
-        finalScheduleHours = parseInt(schedule.replace('h', ''));
-        if (isNaN(finalScheduleHours)) {
+        const hours = Number(schedule.replace('h', ''));
+        if (isNaN(hours)) {
           throw new Error('Invalid legacy schedule format');
         }
-        finalSchedule = schedule;
+        finalScheduleHours = Number(hours.toFixed(2));
+        finalSchedule = finalScheduleHours.toFixed(2) + 'h';
         logger.info('Processed legacy schedule:', { 
           input: schedule,
-          hours: finalScheduleHours,
+          hours,
+          finalScheduleHours,
+          finalSchedule,
           schedule: finalSchedule
         });
       } catch (error) {
