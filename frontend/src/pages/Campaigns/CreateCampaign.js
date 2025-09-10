@@ -93,8 +93,7 @@ const CreateCampaign = () => {
     register,
     handleSubmit,
     formState: { errors },
-    setValue,
-    watch
+    setValue
   } = useForm({
     defaultValues: {
       topic: '',
@@ -113,7 +112,7 @@ const CreateCampaign = () => {
     if (isEditing) {
       fetchCampaign();
     }
-  }, [id, isEditing]);
+  }, [id, isEditing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchWordpressSites = async () => {
     try {

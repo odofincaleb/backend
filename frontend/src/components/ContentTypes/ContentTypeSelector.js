@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { Check, Info, Settings } from 'lucide-react';
-import { Button, Card, Badge } from '../../styles/GlobalStyles';
+import { Card } from '../../styles/GlobalStyles';
 
 const ContentTypeSelectorContainer = styled.div`
   margin: 2rem 0;
@@ -222,7 +222,8 @@ const ContentTypeSelector = ({
       }
     });
     
-    // Filter out variables that are already covered by main campaign form fields
+    // Filter out ONLY the variables that are already covered by main campaign form fields
+    // Keep all other variables that are needed for content generation
     const duplicateVariables = ['TOPIC', 'TONE', 'AUDIENCE', 'CONTEXT'];
     const filteredVariables = Array.from(allVariables).filter(variable => 
       !duplicateVariables.includes(variable)
