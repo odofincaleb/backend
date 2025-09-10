@@ -3,22 +3,23 @@ const Joi = require('joi');
 const { query } = require('../database/connection');
 const { authenticateToken } = require('../middleware/auth');
 const logger = require('../utils/logger');
+const contentTypeTemplates = require('../services/contentTypeTemplates');
 
 const router = express.Router();
 
 // Validation schemas
-const createTitleSchema = Joi.object({
-  campaignId: Joi.string().uuid().required(),
-  title: Joi.string().min(5).max(500).required()
+const addTitleSchema = Joi.object({
+  title: Joi.string().min(5).max(500).required(),
+  keywords: Joi.array().items(Joi.string()).default([])
 });
 
-const updateTitleStatusSchema = Joi.object({
-  status: Joi.string().valid('approved', 'rejected').required()
+const generateTitlesSchema = Joi.object({
+  count: Joi.number().min(1).max(10).default(5)
 });
 
 /**
  * GET /api/title-queue/:campaignId
- * Get all titles in queue for a specific campaign
+ * Get all titles for a specific campaign
  */
 router.get('/:campaignId', authenticateToken, async (req, res) => {
   try {
@@ -26,48 +27,61 @@ router.get('/:campaignId', authenticateToken, async (req, res) => {
     const campaignId = req.params.campaignId;
 
     // Verify campaign belongs to user
-    const campaignResult = await query(
+    const campaignCheck = await query(
       'SELECT id FROM campaigns WHERE id = $1 AND user_id = $2',
       [campaignId, userId]
     );
 
-    if (campaignResult.rows.length === 0) {
+    if (campaignCheck.rows.length === 0) {
       return res.status(404).json({
-        error: 'Campaign not found',
-        message: 'The specified campaign does not exist or does not belong to you'
+        error: 'Campaign not found'
       });
     }
 
     // Get titles for the campaign
     const result = await query(
-      `SELECT id, title, status, created_at, updated_at
+      `SELECT id, title, status, keywords, generated_at, approved_at, used_at, created_at
        FROM title_queue
        WHERE campaign_id = $1
        ORDER BY created_at DESC`,
       [campaignId]
     );
 
+    const titles = result.rows.map(title => ({
+      id: title.id,
+      title: title.title,
+      status: title.status,
+      keywords: title.keywords,
+      generatedAt: title.generated_at,
+      approvedAt: title.approved_at,
+      usedAt: title.used_at,
+      createdAt: title.created_at
+    }));
+
     res.json({
-      titles: result.rows
+      titles
     });
 
   } catch (error) {
-    logger.error('Get title queue error:', error);
+    logger.error('Get titles error:', error);
     res.status(500).json({
       error: 'Internal server error',
-      message: 'Failed to get title queue'
+      message: 'Failed to get titles'
     });
   }
 });
 
 /**
- * POST /api/title-queue
- * Add a new title to the queue
+ * POST /api/title-queue/:campaignId
+ * Add a custom title to the queue
  */
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/:campaignId', authenticateToken, async (req, res) => {
   try {
+    const userId = req.user.id;
+    const campaignId = req.params.campaignId;
+
     // Validate input
-    const { error, value } = createTitleSchema.validate(req.body);
+    const { error, value } = addTitleSchema.validate(req.body);
     if (error) {
       return res.status(400).json({
         error: 'Validation error',
@@ -75,51 +89,147 @@ router.post('/', authenticateToken, async (req, res) => {
       });
     }
 
-    const userId = req.user.id;
-    const { campaignId, title } = value;
-
     // Verify campaign belongs to user
-    const campaignResult = await query(
+    const campaignCheck = await query(
       'SELECT id FROM campaigns WHERE id = $1 AND user_id = $2',
       [campaignId, userId]
     );
 
-    if (campaignResult.rows.length === 0) {
+    if (campaignCheck.rows.length === 0) {
       return res.status(404).json({
-        error: 'Campaign not found',
-        message: 'The specified campaign does not exist or does not belong to you'
+        error: 'Campaign not found'
       });
     }
 
-    // Create title in queue
+    const { title, keywords } = value;
+
+    // Add title to queue
     const result = await query(
-      `INSERT INTO title_queue (campaign_id, title, status)
-       VALUES ($1, $2, 'pending')
-       RETURNING id, title, status, created_at`,
-      [campaignId, title]
+      `INSERT INTO title_queue (campaign_id, title, status, keywords)
+       VALUES ($1, $2, 'pending', $3)
+       RETURNING id, title, status, keywords, created_at`,
+      [campaignId, title, JSON.stringify(keywords)]
     );
 
     const newTitle = result.rows[0];
 
-    // Log the event
+    // Log title addition
     await query(
-      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
-       VALUES ($1, $2, 'title_added', 'Title added to queue: "${title}"', 'info')`,
-      [userId, campaignId]
+      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity, metadata)
+       VALUES ($1, $2, 'title_added', 'Custom title added to queue', 'info', $3)`,
+      [userId, campaignId, JSON.stringify({ title, keywords })]
     );
 
     logger.info('Title added to queue:', { userId, campaignId, titleId: newTitle.id });
 
     res.status(201).json({
-      message: 'Title added to queue successfully',
-      title: newTitle
+      message: 'Title added successfully',
+      title: {
+        id: newTitle.id,
+        title: newTitle.title,
+        status: newTitle.status,
+        keywords: newTitle.keywords,
+        createdAt: newTitle.created_at
+      }
     });
 
   } catch (error) {
-    logger.error('Add title to queue error:', error);
+    logger.error('Add title error:', error);
     res.status(500).json({
       error: 'Internal server error',
-      message: 'Failed to add title to queue'
+      message: 'Failed to add title'
+    });
+  }
+});
+
+/**
+ * POST /api/title-queue/:campaignId/generate
+ * Generate titles using AI
+ */
+router.post('/:campaignId/generate', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const campaignId = req.params.campaignId;
+
+    // Validate input
+    const { error, value } = generateTitlesSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: error.details[0].message
+      });
+    }
+
+    const { count } = value;
+
+    // Get campaign details
+    const campaignResult = await query(
+      `SELECT c.*, ws.site_name, ws.site_url
+       FROM campaigns c
+       LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
+       WHERE c.id = $1 AND c.user_id = $2`,
+      [campaignId, userId]
+    );
+
+    if (campaignResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Campaign not found'
+      });
+    }
+
+    const campaign = campaignResult.rows[0];
+
+    // Generate titles using AI (simplified version for now)
+    const generatedTitles = [];
+    for (let i = 0; i < count; i++) {
+      const titleNumber = i + 1;
+      const title = `Generated Title ${titleNumber} for ${campaign.topic}`;
+      const keywords = [campaign.topic.toLowerCase().replace(/\s+/g, '-')];
+      
+      generatedTitles.push({
+        title,
+        keywords
+      });
+    }
+
+    // Insert generated titles
+    const insertedTitles = [];
+    for (const titleData of generatedTitles) {
+      const result = await query(
+        `INSERT INTO title_queue (campaign_id, title, status, keywords)
+         VALUES ($1, $2, 'pending', $3)
+         RETURNING id, title, status, keywords, created_at`,
+        [campaignId, titleData.title, JSON.stringify(titleData.keywords)]
+      );
+      
+      insertedTitles.push({
+        id: result.rows[0].id,
+        title: result.rows[0].title,
+        status: result.rows[0].status,
+        keywords: result.rows[0].keywords,
+        createdAt: result.rows[0].created_at
+      });
+    }
+
+    // Log title generation
+    await query(
+      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity, metadata)
+       VALUES ($1, $2, 'titles_generated', 'Generated ${count} titles', 'info', $3)`,
+      [userId, campaignId, JSON.stringify({ count, titles: generatedTitles.map(t => t.title) })]
+    );
+
+    logger.info('Titles generated:', { userId, campaignId, count });
+
+    res.status(201).json({
+      message: `${count} titles generated successfully`,
+      titles: insertedTitles
+    });
+
+  } catch (error) {
+    logger.error('Generate titles error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to generate titles'
     });
   }
 });
@@ -130,60 +240,69 @@ router.post('/', authenticateToken, async (req, res) => {
  */
 router.put('/:titleId/status', authenticateToken, async (req, res) => {
   try {
-    // Validate input
-    const { error, value } = updateTitleStatusSchema.validate(req.body);
-    if (error) {
+    const userId = req.user.id;
+    const titleId = req.params.titleId;
+    const { status } = req.body;
+
+    if (!['approved', 'rejected', 'pending'].includes(status)) {
       return res.status(400).json({
-        error: 'Validation error',
-        message: error.details[0].message
+        error: 'Invalid status',
+        message: 'Status must be approved, rejected, or pending'
       });
     }
 
-    const userId = req.user.id;
-    const titleId = req.params.titleId;
-    const { status } = value;
-
     // Verify title belongs to user's campaign
-    const titleResult = await query(
-      `SELECT tq.id, tq.title, tq.campaign_id, c.user_id
+    const titleCheck = await query(
+      `SELECT tq.id, tq.campaign_id, c.user_id
        FROM title_queue tq
        JOIN campaigns c ON tq.campaign_id = c.id
        WHERE tq.id = $1 AND c.user_id = $2`,
       [titleId, userId]
     );
 
-    if (titleResult.rows.length === 0) {
+    if (titleCheck.rows.length === 0) {
       return res.status(404).json({
-        error: 'Title not found',
-        message: 'The specified title does not exist or does not belong to you'
+        error: 'Title not found'
       });
     }
 
-    const title = titleResult.rows[0];
+    const campaignId = titleCheck.rows[0].campaign_id;
 
     // Update title status
+    const updateFields = ['status = $1', 'updated_at = CURRENT_TIMESTAMP'];
+    const updateValues = [status];
+
+    if (status === 'approved') {
+      updateFields.push('approved_at = CURRENT_TIMESTAMP');
+    }
+
     const result = await query(
       `UPDATE title_queue 
-       SET status = $1, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2
-       RETURNING id, title, status, updated_at`,
-      [status, titleId]
+       SET ${updateFields.join(', ')}
+       WHERE id = $${updateValues.length + 1}
+       RETURNING id, title, status, approved_at`,
+      [...updateValues, titleId]
     );
 
     const updatedTitle = result.rows[0];
 
-    // Log the event
+    // Log status update
     await query(
-      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
-       VALUES ($1, $2, 'title_${status}', 'Title ${status}: "${title.title}"', 'info')`,
-      [userId, title.campaign_id]
+      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity, metadata)
+       VALUES ($1, $2, 'title_status_updated', 'Title status updated to ${status}', 'info', $3)`,
+      [userId, campaignId, JSON.stringify({ titleId, status })]
     );
 
-    logger.info('Title status updated:', { userId, titleId, status });
+    logger.info('Title status updated:', { userId, campaignId, titleId, status });
 
     res.json({
-      message: `Title ${status} successfully`,
-      title: updatedTitle
+      message: 'Title status updated successfully',
+      title: {
+        id: updatedTitle.id,
+        title: updatedTitle.title,
+        status: updatedTitle.status,
+        approvedAt: updatedTitle.approved_at
+      }
     });
 
   } catch (error) {
@@ -205,37 +324,33 @@ router.delete('/:titleId', authenticateToken, async (req, res) => {
     const titleId = req.params.titleId;
 
     // Verify title belongs to user's campaign
-    const titleResult = await query(
-      `SELECT tq.id, tq.title, tq.campaign_id, c.user_id
+    const titleCheck = await query(
+      `SELECT tq.id, tq.campaign_id, c.user_id
        FROM title_queue tq
        JOIN campaigns c ON tq.campaign_id = c.id
        WHERE tq.id = $1 AND c.user_id = $2`,
       [titleId, userId]
     );
 
-    if (titleResult.rows.length === 0) {
+    if (titleCheck.rows.length === 0) {
       return res.status(404).json({
-        error: 'Title not found',
-        message: 'The specified title does not exist or does not belong to you'
+        error: 'Title not found'
       });
     }
 
-    const title = titleResult.rows[0];
+    const campaignId = titleCheck.rows[0].campaign_id;
 
-    // Delete the title
-    await query(
-      'DELETE FROM title_queue WHERE id = $1',
-      [titleId]
-    );
+    // Delete title
+    await query('DELETE FROM title_queue WHERE id = $1', [titleId]);
 
-    // Log the event
+    // Log title deletion
     await query(
       `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
-       VALUES ($1, $2, 'title_deleted', 'Title deleted from queue: "${title.title}"', 'info')`,
-      [userId, title.campaign_id]
+       VALUES ($1, $2, 'title_deleted', 'Title deleted from queue', 'info')`,
+      [userId, campaignId]
     );
 
-    logger.info('Title deleted from queue:', { userId, titleId });
+    logger.info('Title deleted:', { userId, campaignId, titleId });
 
     res.json({
       message: 'Title deleted successfully'
@@ -246,77 +361,6 @@ router.delete('/:titleId', authenticateToken, async (req, res) => {
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to delete title'
-    });
-  }
-});
-
-/**
- * POST /api/title-queue/:campaignId/generate
- * Generate titles for a campaign
- */
-router.post('/:campaignId/generate', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const campaignId = req.params.campaignId;
-    const { count = 5 } = req.body; // Default to 5 titles
-
-    // Verify campaign belongs to user
-    const campaignResult = await query(
-      `SELECT c.*, ws.site_name, ws.site_url
-       FROM campaigns c
-       LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
-       WHERE c.id = $1 AND c.user_id = $2`,
-      [campaignId, userId]
-    );
-
-    if (campaignResult.rows.length === 0) {
-      return res.status(404).json({
-        error: 'Campaign not found',
-        message: 'The specified campaign does not exist or does not belong to you'
-      });
-    }
-
-    const campaign = campaignResult.rows[0];
-
-    // Import content generator
-    const contentGenerator = require('../services/contentGenerator');
-    
-    // Generate titles
-    const titles = await contentGenerator.generateTitles(campaign, count);
-
-    // Add titles to queue
-    const titlePromises = titles.map(title => 
-      query(
-        `INSERT INTO title_queue (campaign_id, title, status)
-         VALUES ($1, $2, 'pending')
-         RETURNING id, title, status, created_at`,
-        [campaignId, title]
-      )
-    );
-
-    const results = await Promise.all(titlePromises);
-    const newTitles = results.map(result => result.rows[0]);
-
-    // Log the event
-    await query(
-      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
-       VALUES ($1, $2, 'titles_generated', 'Generated ${titles.length} titles for campaign', 'info')`,
-      [userId, campaignId]
-    );
-
-    logger.info('Titles generated for campaign:', { userId, campaignId, count: titles.length });
-
-    res.json({
-      message: `Generated ${titles.length} titles successfully`,
-      titles: newTitles
-    });
-
-  } catch (error) {
-    logger.error('Generate titles error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to generate titles',
-      details: error.message
     });
   }
 });
