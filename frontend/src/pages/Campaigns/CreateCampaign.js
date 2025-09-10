@@ -100,7 +100,7 @@ const CreateCampaign = () => {
       context: '',
       tone_of_voice: 'conversational',
       writing_style: 'pas',
-      scheduleHours: 24,
+      scheduleHours: '24.00',
       numberOfTitles: 5,
       wordpress_site_id: '',
       imperfection_list: []
@@ -312,20 +312,25 @@ const CreateCampaign = () => {
             <Label htmlFor="scheduleHours">Publishing Schedule (Hours)</Label>
             <Input
               id="scheduleHours"
-              type="number"
-              step="0.1"
-              min="0.1"
-              max="168"
-              placeholder="e.g., 0.5, 1, 2, 6, 24"
+              type="text"
+              placeholder="e.g., 0.10, 0.50, 1.00, 24.00"
               {...register('scheduleHours', { 
                 required: 'Schedule is required',
-                min: { value: 0.1, message: 'Minimum is 0.1 hours (6 minutes)' },
-                max: { value: 168, message: 'Maximum is 168 hours (1 week)' }
+                pattern: {
+                  value: /^\d+\.\d{2}$/,
+                  message: 'Please use format like 0.10, 0.50, 1.00, 24.00'
+                },
+                validate: {
+                  isNumber: value => !isNaN(value) || 'Must be a valid number',
+                  minValue: value => Number(value) >= 0.1 || 'Minimum is 0.1 hours (6 minutes)',
+                  maxValue: value => Number(value) <= 168 || 'Maximum is 168 hours (1 week)',
+                  format: value => /^\d+\.\d{2}$/.test(value) || 'Must have exactly 2 decimal places'
+                }
               })}
             />
             {errors.scheduleHours && <ErrorMessage>{errors.scheduleHours.message}</ErrorMessage>}
             <p style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '0.5rem' }}>
-              Enter the number of hours between posts (e.g., 0.5 for 30 minutes, 1 for 1 hour, 24 for daily)
+              Enter hours with exactly 2 decimal places (e.g., 0.10 for 6 minutes, 0.50 for 30 minutes, 1.00 for 1 hour, 24.00 for daily)
             </p>
           </FormGroup>
 
