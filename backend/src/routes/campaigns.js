@@ -96,16 +96,15 @@ router.get('/', authenticateToken, async (req, res) => {
       // Try with all new columns first (after migration)
       result = await query(
         `SELECT c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
-                c.imperfection_list, c.schedule, c.schedule_hours, c.status, c.next_publish_at,
-                c.created_at, c.updated_at, c.content_types, c.content_type_variables,
+                c.imperfection_list, c.schedule, c.status, c.next_publish_at,
+                c.created_at, c.updated_at,
                 ws.site_name, ws.site_url,
                 COUNT(cq.id) as posts_published,
-                COUNT(tq.id) as titles_in_queue,
-                COUNT(CASE WHEN tq.status = 'approved' THEN 1 END) as approved_titles
+                0 as titles_in_queue,
+                0 as approved_titles
          FROM campaigns c
          LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
          LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
-         LEFT JOIN title_queue tq ON c.id = tq.campaign_id
          WHERE c.user_id = $1
          GROUP BY c.id, ws.site_name, ws.site_url
          ORDER BY c.created_at DESC`,
@@ -119,13 +118,12 @@ router.get('/', authenticateToken, async (req, res) => {
               c.imperfection_list, c.schedule, c.status, c.next_publish_at,
               c.created_at, c.updated_at,
               ws.site_name, ws.site_url,
-                  COUNT(cq.id) as posts_published,
-                  COUNT(tq.id) as titles_in_queue,
-                  COUNT(CASE WHEN tq.status = 'approved' THEN 1 END) as approved_titles
+              COUNT(cq.id) as posts_published,
+              0 as titles_in_queue,
+              0 as approved_titles
        FROM campaigns c
        LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
        LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
-           LEFT JOIN title_queue tq ON c.id = tq.campaign_id
        WHERE c.user_id = $1
        GROUP BY c.id, ws.site_name, ws.site_url
        ORDER BY c.created_at DESC`,
@@ -144,7 +142,7 @@ router.get('/', authenticateToken, async (req, res) => {
       writingStyle: campaign.writing_style,
       imperfectionList: campaign.imperfection_list,
       schedule: campaign.schedule,
-      scheduleHours: campaign.schedule_hours || (campaign.schedule ? parseInt(campaign.schedule.replace('h', '')) : 24),
+      scheduleHours: campaign.schedule ? parseInt(campaign.schedule.replace('h', '')) : 24,
       status: campaign.status,
       nextPublishAt: campaign.next_publish_at,
       wordpressSite: campaign.site_name ? {
@@ -154,8 +152,8 @@ router.get('/', authenticateToken, async (req, res) => {
       postsPublished: parseInt(campaign.posts_published),
       titlesInQueue: parseInt(campaign.titles_in_queue),
       approvedTitles: parseInt(campaign.approved_titles),
-      contentTypes: campaign.content_types || Object.keys(contentTypeTemplates.getAllContentTypes()),
-      contentTypeVariables: campaign.content_type_variables || {},
+      contentTypes: Object.keys(contentTypeTemplates.getAllContentTypes()),
+      contentTypeVariables: {},
       createdAt: campaign.created_at,
       updatedAt: campaign.updated_at
     }));
