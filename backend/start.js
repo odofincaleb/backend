@@ -7,8 +7,8 @@ async function startApplication() {
   // Run regular migrations (preserves existing data)
   try {
     console.log('🔄 Running database migrations...');
-    const { migrate } = require('./src/database/migrate.js');
-    await migrate();
+    const { runMigrations } = require('./src/database/migrate.js');
+    await runMigrations();
     console.log('✅ Database migrations completed');
   } catch (error) {
     console.error('❌ Migration failed:', error.message);
