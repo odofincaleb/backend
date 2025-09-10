@@ -65,16 +65,33 @@ CREATE TABLE campaigns (
     writing_style VARCHAR(50) DEFAULT 'pas' CHECK (writing_style IN ('pas', 'aida', 'listicle')),
     imperfection_list JSONB DEFAULT '[]'::jsonb,
     schedule VARCHAR(20) DEFAULT '24h' CHECK (schedule IN ('24h', '48h', '72h')),
+    schedule_hours DECIMAL(5,2) DEFAULT 24.0, -- Custom schedule in hours (0.1 to 168 hours)
+    content_types JSONB DEFAULT '[]'::jsonb, -- Array of content types for this campaign
+    content_type_variables JSONB DEFAULT '{}'::jsonb, -- Variables for content type templates
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'error')),
     next_publish_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Title queue table (for title generation workflow)
+CREATE TABLE title_queue (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    title VARCHAR(500) NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'used')),
+    keywords JSONB DEFAULT '[]'::jsonb,
+    generated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    approved_at TIMESTAMP WITH TIME ZONE,
+    used_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Content queue table
 CREATE TABLE content_queue (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+    title_queue_id UUID REFERENCES title_queue(id), -- Link to the title used
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'failed', 'cancelled')),
     title VARCHAR(500),
     keywords JSONB DEFAULT '[]'::jsonb,
@@ -119,9 +136,12 @@ CREATE INDEX idx_license_keys_status ON license_keys(status);
 CREATE INDEX idx_campaigns_user_id ON campaigns(user_id);
 CREATE INDEX idx_campaigns_status ON campaigns(status);
 CREATE INDEX idx_campaigns_next_publish ON campaigns(next_publish_at);
+CREATE INDEX idx_title_queue_campaign_id ON title_queue(campaign_id);
+CREATE INDEX idx_title_queue_status ON title_queue(status);
 CREATE INDEX idx_content_queue_campaign_id ON content_queue(campaign_id);
 CREATE INDEX idx_content_queue_status ON content_queue(status);
 CREATE INDEX idx_content_queue_scheduled_for ON content_queue(scheduled_for);
+CREATE INDEX idx_content_queue_title_queue_id ON content_queue(title_queue_id);
 CREATE INDEX idx_logs_user_id ON logs(user_id);
 CREATE INDEX idx_logs_campaign_id ON logs(campaign_id);
 CREATE INDEX idx_logs_created_at ON logs(created_at);
