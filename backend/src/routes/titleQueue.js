@@ -179,27 +179,27 @@ router.post('/:campaignId/generate', authenticateToken, async (req, res) => {
 
     const campaign = campaignResult.rows[0];
 
-    // Generate titles using AI (simplified version for now)
-    const generatedTitles = [];
-    for (let i = 0; i < count; i++) {
-      const titleNumber = i + 1;
-      const title = `Generated Title ${titleNumber} for ${campaign.topic}`;
-      const keywords = [campaign.topic.toLowerCase().replace(/\s+/g, '-')];
-      
-      generatedTitles.push({
-        title,
-        keywords
-      });
-    }
+    // Generate titles using AI
+    const ContentGenerator = require('../services/contentGenerator');
+    const contentGenerator = new ContentGenerator();
+    
+    const generatedTitles = await contentGenerator.generateTitles(campaign, count);
 
     // Insert generated titles
     const insertedTitles = [];
-    for (const titleData of generatedTitles) {
+    for (const title of generatedTitles) {
+      // Extract keywords from the title for better organization
+      const keywords = title.toLowerCase()
+        .replace(/[^\w\s]/g, '')
+        .split(/\s+/)
+        .filter(word => word.length > 3)
+        .slice(0, 5); // Limit to 5 keywords
+      
       const result = await query(
         `INSERT INTO title_queue (campaign_id, title, status, keywords)
          VALUES ($1, $2, 'pending', $3)
          RETURNING id, title, status, keywords, created_at`,
-        [campaignId, titleData.title, JSON.stringify(titleData.keywords)]
+        [campaignId, title, JSON.stringify(keywords)]
       );
       
       insertedTitles.push({
@@ -215,7 +215,7 @@ router.post('/:campaignId/generate', authenticateToken, async (req, res) => {
     await query(
       `INSERT INTO logs (user_id, campaign_id, event_type, message, severity, metadata)
        VALUES ($1, $2, 'titles_generated', 'Generated ${count} titles', 'info', $3)`,
-      [userId, campaignId, JSON.stringify({ count, titles: generatedTitles.map(t => t.title) })]
+      [userId, campaignId, JSON.stringify({ count, titles: generatedTitles })]
     );
 
     logger.info('Titles generated:', { userId, campaignId, count });
