@@ -48,6 +48,7 @@ const updateCampaignSchema = Joi.object({
   imperfectionList: Joi.array().items(Joi.string()),
   schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
   scheduleHours: Joi.number().min(0.1).max(168).precision(2).optional(), // New custom hours field
+  numberOfTitles: Joi.number().min(1).max(20).optional(), // Number of titles to generate
   wordpressSiteId: Joi.string().uuid().optional(),
   status: Joi.string().valid('active', 'paused', 'completed', 'error'),
   contentTypes: Joi.array().items(Joi.string()).max(5).optional(),
@@ -145,6 +146,7 @@ router.get('/', authenticateToken, async (req, res) => {
       imperfectionList: campaign.imperfection_list,
       schedule: campaign.schedule,
       scheduleHours: campaign.schedule_hours || (campaign.schedule ? parseInt(campaign.schedule.replace('h', '')) : 24),
+      numberOfTitles: campaign.number_of_titles || 5,
       status: campaign.status,
       nextPublishAt: campaign.next_publish_at,
       wordpressSite: campaign.site_name ? {
@@ -207,8 +209,12 @@ router.get('/:id', authenticateToken, async (req, res) => {
         writingStyle: campaign.writing_style,
         imperfectionList: campaign.imperfection_list,
         schedule: campaign.schedule,
+        scheduleHours: campaign.schedule_hours || (campaign.schedule ? parseInt(campaign.schedule.replace('h', '')) : 24),
+        numberOfTitles: campaign.number_of_titles || 5,
         status: campaign.status,
         nextPublishAt: campaign.next_publish_at,
+        contentTypes: campaign.content_types || Object.keys(contentTypeTemplates.getAllContentTypes()),
+        contentTypeVariables: campaign.content_type_variables || {},
         wordpressSite: campaign.site_name ? {
           id: campaign.wordpress_site_id,
           name: campaign.site_name,
@@ -470,6 +476,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
       updates.push(`schedule = $${paramCount++}`);
       values.push(value.schedule);
     }
+    if (value.scheduleHours !== undefined) {
+      updates.push(`schedule_hours = $${paramCount++}`);
+      values.push(value.scheduleHours);
+    }
+    if (value.numberOfTitles !== undefined) {
+      updates.push(`number_of_titles = $${paramCount++}`);
+      values.push(value.numberOfTitles);
+    }
     if (value.wordpressSiteId) {
       // Validate WordPress site
       const siteResult = await query(
@@ -487,6 +501,14 @@ router.put('/:id', authenticateToken, async (req, res) => {
     if (value.status) {
       updates.push(`status = $${paramCount++}`);
       values.push(value.status);
+    }
+    if (value.contentTypes) {
+      updates.push(`content_types = $${paramCount++}`);
+      values.push(JSON.stringify(value.contentTypes));
+    }
+    if (value.contentTypeVariables) {
+      updates.push(`content_type_variables = $${paramCount++}`);
+      values.push(JSON.stringify(value.contentTypeVariables));
     }
 
     if (updates.length === 0) {
