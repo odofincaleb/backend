@@ -203,8 +203,18 @@ const Campaigns = () => {
       setCampaigns(prev => prev.filter(campaign => campaign.id !== campaignId));
       toast.success('Campaign deleted successfully');
     } catch (error) {
-      toast.error('Failed to delete campaign');
       console.error('Error deleting campaign:', error);
+      
+      // Provide more specific error messages
+      if (error.response?.status === 500) {
+        toast.error('Server error. Please try again in a few moments.');
+      } else if (error.response?.status === 404) {
+        toast.error('Campaign not found. It may have already been deleted.');
+      } else if (error.response?.status === 403) {
+        toast.error('Access denied. You cannot delete this campaign.');
+      } else {
+        toast.error('Failed to delete campaign. Please try again.');
+      }
     } finally {
       setActionLoading(prev => ({ ...prev, [campaignId]: false }));
     }

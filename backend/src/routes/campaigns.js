@@ -585,6 +585,15 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // Delete campaign and related data
+    // First, try to delete from title_queue if it exists
+    try {
+      await query('DELETE FROM title_queue WHERE campaign_id = $1', [campaignId]);
+    } catch (error) {
+      // title_queue table might not exist yet, continue with deletion
+      logger.warn('title_queue table might not exist, continuing with campaign deletion');
+    }
+    
     // Delete campaign (content_queue will be deleted via CASCADE)
     await query('DELETE FROM campaigns WHERE id = $1', [campaignId]);
 
