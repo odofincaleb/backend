@@ -16,6 +16,7 @@ const createCampaignSchema = Joi.object({
   imperfectionList: Joi.array().items(Joi.string()).default([]),
   schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
   scheduleHours: Joi.number().min(0.1).max(168).precision(2).optional(), // New custom hours field
+  numberOfTitles: Joi.number().min(1).max(20).default(5), // Number of titles to generate
   wordpressSiteId: Joi.string().uuid().optional(),
   contentTypes: Joi.array().items(Joi.string()).max(5).optional(),
   contentTypeVariables: Joi.object().optional()
@@ -252,6 +253,7 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
       imperfectionList,
       schedule,
       scheduleHours,
+      numberOfTitles,
       wordpressSiteId,
       contentTypes,
       contentTypeVariables
@@ -303,15 +305,15 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
       result = await query(
         `INSERT INTO campaigns (
           user_id, topic, context, tone_of_voice, writing_style, 
-          imperfection_list, schedule, schedule_hours, wordpress_site_id, next_publish_at,
+          imperfection_list, schedule, schedule_hours, number_of_titles, wordpress_site_id, next_publish_at,
           content_types, content_type_variables
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING id, topic, context, tone_of_voice, writing_style, 
-                  imperfection_list, schedule, schedule_hours, status, next_publish_at, created_at,
+                  imperfection_list, schedule, schedule_hours, number_of_titles, status, next_publish_at, created_at,
                   content_types, content_type_variables`,
         [
           userId, topic, context, toneOfVoice, writingStyle,
-          JSON.stringify(imperfectionList), finalSchedule, finalScheduleHours, wordpressSiteId, nextPublishAt,
+          JSON.stringify(imperfectionList), finalSchedule, finalScheduleHours, numberOfTitles, wordpressSiteId, nextPublishAt,
           JSON.stringify(finalContentTypes), JSON.stringify(finalContentTypeVariables)
         ]
       );
@@ -337,14 +339,51 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
 
     const campaign = result.rows[0];
 
+    // Automatically generate titles for the new campaign
+    try {
+      const ContentGenerator = require('../services/contentGenerator');
+      const contentGenerator = new ContentGenerator();
+      
+      // Check if OpenAI API key is configured
+      if (process.env.OPENAI_API_KEY) {
+        logger.info(`Auto-generating ${numberOfTitles} titles for new campaign: ${campaign.id}`);
+        
+        const generatedTitles = await contentGenerator.generateTitles(campaign, numberOfTitles);
+        
+        if (generatedTitles && generatedTitles.length > 0) {
+          // Insert generated titles into title_queue
+          for (const title of generatedTitles) {
+            const keywords = title.toLowerCase()
+              .replace(/[^\w\s]/g, '')
+              .split(/\s+/)
+              .filter(word => word.length > 3)
+              .slice(0, 5);
+            
+            await query(
+              `INSERT INTO title_queue (campaign_id, title, status, keywords)
+               VALUES ($1, $2, 'pending', $3)`,
+              [campaign.id, title, JSON.stringify(keywords)]
+            );
+          }
+          
+          logger.info(`Auto-generated ${generatedTitles.length} titles for campaign: ${campaign.id}`);
+        }
+      } else {
+        logger.warn('OpenAI API key not configured, skipping auto-title generation');
+      }
+    } catch (titleError) {
+      logger.error('Auto-title generation failed:', titleError);
+      // Don't fail campaign creation if title generation fails
+    }
+
     // Log campaign creation
     await query(
       `INSERT INTO logs (user_id, campaign_id, event_type, message, severity, metadata)
        VALUES ($1, $2, 'campaign_created', 'New campaign created', 'info', $3)`,
-      [userId, campaign.id, JSON.stringify({ topic, schedule })]
+      [userId, campaign.id, JSON.stringify({ topic, schedule, numberOfTitles })]
     );
 
-    logger.info('Campaign created:', { userId, campaignId: campaign.id, topic });
+    logger.info('Campaign created:', { userId, campaignId: campaign.id, topic, numberOfTitles });
 
     res.status(201).json({
       message: 'Campaign created successfully',

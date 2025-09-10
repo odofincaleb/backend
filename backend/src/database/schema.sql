@@ -66,6 +66,7 @@ CREATE TABLE campaigns (
     imperfection_list JSONB DEFAULT '[]'::jsonb,
     schedule VARCHAR(20) DEFAULT '24h' CHECK (schedule IN ('24h', '48h', '72h')),
     schedule_hours DECIMAL(5,2) DEFAULT 24.0, -- Custom schedule in hours (0.1 to 168 hours)
+    number_of_titles INTEGER DEFAULT 5, -- Number of titles to generate for this campaign
     content_types JSONB DEFAULT '[]'::jsonb, -- Array of content types for this campaign
     content_type_variables JSONB DEFAULT '{}'::jsonb, -- Variables for content type templates
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'error')),

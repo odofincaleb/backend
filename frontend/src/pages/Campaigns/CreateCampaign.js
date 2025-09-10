@@ -101,6 +101,7 @@ const CreateCampaign = () => {
       tone_of_voice: 'conversational',
       writing_style: 'pas',
       scheduleHours: 24,
+      numberOfTitles: 5,
       wordpress_site_id: '',
       imperfection_list: []
     }
@@ -146,6 +147,7 @@ const CreateCampaign = () => {
         tone_of_voice: campaign.toneOfVoice,
         writing_style: campaign.writingStyle,
         scheduleHours: campaign.scheduleHours || 24,
+        numberOfTitles: campaign.numberOfTitles || 5,
         wordpress_site_id: campaign.wordpressSite?.id || '',
         imperfection_list: campaign.imperfectionList || []
       };
@@ -188,6 +190,7 @@ const CreateCampaign = () => {
         toneOfVoice: data.tone_of_voice,
         writingStyle: data.writing_style,
         scheduleHours: parseFloat(data.scheduleHours),
+        numberOfTitles: parseInt(data.numberOfTitles),
         wordpressSiteId: data.wordpress_site_id || null,
         imperfectionList: imperfectionList,
         contentTypes: selectedContentTypes,
@@ -308,6 +311,28 @@ const CreateCampaign = () => {
             </p>
           </FormGroup>
 
+          <FormGroup>
+            <Label htmlFor="numberOfTitles">Number of Titles to Generate</Label>
+            <Input
+              id="numberOfTitles"
+              type="number"
+              min="1"
+              max="20"
+              placeholder="e.g., 5, 10, 15"
+              {...register('numberOfTitles', { 
+                required: 'Number of titles is required',
+                min: { value: 1, message: 'Minimum is 1 title' },
+                max: { value: 20, message: 'Maximum is 20 titles' }
+              })}
+            />
+            {errors.numberOfTitles && <ErrorMessage>{errors.numberOfTitles.message}</ErrorMessage>}
+            <p style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '0.5rem' }}>
+              AI will generate this many titles for you to review and approve
+            </p>
+          </FormGroup>
+        </FormRow>
+
+        <FormRow>
           <FormGroup>
             <Label htmlFor="wordpress_site_id">WordPress Site *</Label>
             <Select 

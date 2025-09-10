@@ -29,6 +29,10 @@ async function addMissingColumns() {
         sql: `ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS content_type_variables JSONB DEFAULT '{}'::jsonb;`
       },
       {
+        name: 'Add number_of_titles column',
+        sql: `ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS number_of_titles INTEGER DEFAULT 5;`
+      },
+      {
         name: 'Create title_queue table',
         sql: `CREATE TABLE IF NOT EXISTS title_queue (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
