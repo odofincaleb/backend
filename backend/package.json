@@ -11,6 +11,7 @@
     "test:watch": "jest --watch",
     "migrate": "node src/database/migrate.js",
     "migrate:railway": "node run-migrations.js",
+    "add-columns": "node add-missing-columns.js",
     "force-migrate": "node src/database/force-migrate.js",
     "manual-setup": "node manual-setup.js",
     "seed": "node src/database/seed.js"

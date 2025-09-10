@@ -23,6 +23,16 @@ async function startApplication() {
     }
   }
 
+  // Add missing columns to existing database
+  try {
+    console.log('🔄 Adding missing columns...');
+    require('./add-missing-columns.js');
+    console.log('✅ Missing columns added');
+  } catch (error) {
+    console.error('❌ Adding columns failed:', error.message);
+    // Continue anyway - columns might already exist
+  }
+
   // Run seed data (only if needed)
   try {
     console.log('🌱 Checking if database seeding is needed...');
