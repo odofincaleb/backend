@@ -586,26 +586,45 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 
     // Delete campaign and related data
-    // First, try to delete from title_queue if it exists
-    try {
-      await query('DELETE FROM title_queue WHERE campaign_id = $1', [campaignId]);
-      logger.info('Deleted from title_queue');
-    } catch (error) {
-      // title_queue table might not exist yet, continue with deletion
-      logger.warn('title_queue table might not exist, continuing with campaign deletion:', error.message);
-    }
+    // Use a transaction to ensure atomicity
+    await query('BEGIN');
     
-    // Try to delete from content_queue first to avoid foreign key issues
     try {
-      await query('DELETE FROM content_queue WHERE campaign_id = $1', [campaignId]);
-      logger.info('Deleted from content_queue');
+      // First, try to delete from title_queue if it exists
+      try {
+        await query('DELETE FROM title_queue WHERE campaign_id = $1', [campaignId]);
+        logger.info('Deleted from title_queue');
+      } catch (error) {
+        // title_queue table might not exist yet, continue with deletion
+        logger.warn('title_queue table might not exist, continuing with campaign deletion:', error.message);
+      }
+      
+      // Try to delete from content_queue first to avoid foreign key issues
+      try {
+        // First, try to set title_queue_id to NULL to avoid foreign key constraint issues
+        await query('UPDATE content_queue SET title_queue_id = NULL WHERE campaign_id = $1', [campaignId]);
+        logger.info('Cleared title_queue_id references');
+        
+        // Now delete from content_queue
+        await query('DELETE FROM content_queue WHERE campaign_id = $1', [campaignId]);
+        logger.info('Deleted from content_queue');
+      } catch (error) {
+        logger.warn('Error deleting from content_queue:', error.message);
+      }
+      
+      // Finally delete the campaign
+      await query('DELETE FROM campaigns WHERE id = $1', [campaignId]);
+      logger.info('Deleted campaign');
+      
+      // Commit the transaction
+      await query('COMMIT');
+      
     } catch (error) {
-      logger.warn('Error deleting from content_queue:', error.message);
+      // Rollback on any error
+      await query('ROLLBACK');
+      logger.error('Error deleting campaign, transaction rolled back:', error);
+      throw error;
     }
-    
-    // Finally delete the campaign
-    await query('DELETE FROM campaigns WHERE id = $1', [campaignId]);
-    logger.info('Deleted campaign');
 
     // Log campaign deletion
     await query(
