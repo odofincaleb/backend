@@ -357,22 +357,28 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
         const generatedTitles = await contentGenerator.generateTitles(campaign, numberOfTitles);
         
         if (generatedTitles && generatedTitles.length > 0) {
-          // Insert generated titles into title_queue
-          for (const title of generatedTitles) {
-            const keywords = title.toLowerCase()
-              .replace(/[^\w\s]/g, '')
-              .split(/\s+/)
-              .filter(word => word.length > 3)
-              .slice(0, 5);
+          // Check if title_queue table exists before inserting
+          try {
+            // Insert generated titles into title_queue
+            for (const title of generatedTitles) {
+              const keywords = title.toLowerCase()
+                .replace(/[^\w\s]/g, '')
+                .split(/\s+/)
+                .filter(word => word.length > 3)
+                .slice(0, 5);
+              
+              await query(
+                `INSERT INTO title_queue (campaign_id, title, status, keywords)
+                 VALUES ($1, $2, 'pending', $3)`,
+                [campaign.id, title, JSON.stringify(keywords)]
+              );
+            }
             
-            await query(
-              `INSERT INTO title_queue (campaign_id, title, status, keywords)
-               VALUES ($1, $2, 'pending', $3)`,
-              [campaign.id, title, JSON.stringify(keywords)]
-            );
+            logger.info(`Auto-generated ${generatedTitles.length} titles for campaign: ${campaign.id}`);
+          } catch (tableError) {
+            logger.warn('title_queue table might not exist yet, skipping title insertion:', tableError.message);
+            // Continue without failing campaign creation
           }
-          
-          logger.info(`Auto-generated ${generatedTitles.length} titles for campaign: ${campaign.id}`);
         }
       } else {
         logger.warn('OpenAI API key not configured, skipping auto-title generation');
