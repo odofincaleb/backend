@@ -15,7 +15,7 @@ const createCampaignSchema = Joi.object({
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle').default('pas'),
   imperfectionList: Joi.array().items(Joi.string()).default([]),
   schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
-  scheduleHours: Joi.number().min(0.1).max(168).optional(), // New custom hours field
+  scheduleHours: Joi.number().min(0.1).max(168).precision(2).optional(), // Custom hours (0.1 to 168, max 2 decimal places)
   numberOfTitles: Joi.number().min(1).max(20).default(5), // Number of titles to generate
   wordpressSiteId: Joi.string().uuid().optional(),
   contentTypes: Joi.array().items(Joi.string()).max(5).optional(),
@@ -47,7 +47,7 @@ const updateCampaignSchema = Joi.object({
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle'),
   imperfectionList: Joi.array().items(Joi.string()),
   schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
-  scheduleHours: Joi.number().min(0.1).max(168).optional(), // New custom hours field
+  scheduleHours: Joi.number().min(0.1).max(168).precision(2).optional(), // Custom hours (0.1 to 168, max 2 decimal places)
   numberOfTitles: Joi.number().min(1).max(20).optional(), // Number of titles to generate
   wordpressSiteId: Joi.string().uuid().optional(),
   status: Joi.string().valid('active', 'paused', 'completed', 'error'),
@@ -292,15 +292,15 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
     logger.info('Processing schedule:', { scheduleHours, schedule });
     
     if (scheduleHours !== undefined) {
-      // Use custom hours
-      finalScheduleHours = scheduleHours;
-      finalSchedule = `${scheduleHours}h`; // For backward compatibility
-      logger.info('Using custom schedule hours:', finalScheduleHours);
+      // Use custom hours (ensure 2 decimal places)
+      finalScheduleHours = Number(scheduleHours.toFixed(2));
+      finalSchedule = `${finalScheduleHours}h`; // For backward compatibility
+      logger.info('Using custom schedule hours:', { original: scheduleHours, final: finalScheduleHours });
     } else {
       // Use legacy schedule format
       finalScheduleHours = parseInt(schedule.replace('h', ''));
       finalSchedule = schedule;
-      logger.info('Using legacy schedule:', finalSchedule);
+      logger.info('Using legacy schedule:', { schedule, finalScheduleHours });
     }
     
     // Set default content types if none provided (all 15 types)
