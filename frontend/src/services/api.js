@@ -1,9 +1,10 @@
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 // Create axios instance
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'https://backend-production-8c02.up.railway.app/api',
-  timeout: 60000, // 60 seconds
+  timeout: 30000, // 30 seconds
   headers: {
     'Content-Type': 'application/json',
   }
@@ -24,135 +25,139 @@ api.interceptors.request.use(
 );
 
 // Add retry configuration
-api.defaults.validateStatus = function (status) {
-  // Consider only 5xx errors and network errors as failures for retry
-  return status < 500;
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 1000;
+const MAX_RETRY_DELAY = 10000;
+
+const shouldRetry = (error) => {
+  const { config, code, message } = error;
+  
+  // Don't retry if we've hit our limit
+  if (config.__retryCount >= MAX_RETRIES) {
+    return false;
+  }
+
+  // Retry on connection errors
+  if (!error.response) {
+    return true;
+  }
+
+  // Retry on specific error codes
+  if (code === 'ECONNABORTED' || code === 'ECONNRESET' || message.includes('Network Error')) {
+    return true;
+  }
+
+  // Retry on 5xx errors
+  if (error.response && error.response.status >= 500) {
+    return true;
+  }
+
+  return false;
 };
 
-api.defaults.retry = 3; // Number of retries
-api.defaults.retryDelay = (retryCount) => {
-  return 1000 * Math.pow(2, retryCount); // Exponential backoff
-};
-
-api.defaults.retryCondition = (error) => {
-  // Retry on network errors and 5xx errors
-  return (
-    !error.response ||
-    error.code === 'ECONNABORTED' ||
-    error.code === 'ECONNRESET' ||
-    (error.response && error.response.status >= 500)
+const getRetryDelay = (retryCount) => {
+  const delay = Math.min(
+    INITIAL_RETRY_DELAY * Math.pow(2, retryCount),
+    MAX_RETRY_DELAY
   );
+  return delay + Math.random() * 1000; // Add jitter
 };
 
 // Add retry interceptor
-api.interceptors.response.use(undefined, async (err) => {
-  const { config } = err;
-  if (!config || !config.retry) {
-    return Promise.reject(err);
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const config = error.config;
+
+    if (!config || !shouldRetry(error)) {
+      return Promise.reject(error);
+    }
+
+    // Initialize retry count
+    config.__retryCount = config.__retryCount || 0;
+    config.__retryCount++;
+
+    // Calculate delay with exponential backoff and jitter
+    const delay = getRetryDelay(config.__retryCount);
+
+    // Log retry attempt
+    console.log(`Retry attempt ${config.__retryCount} for ${config.url} after ${delay}ms`);
+
+    // Show toast for retry
+    toast.loading(`Connection lost. Retrying... (${config.__retryCount}/${MAX_RETRIES})`, {
+      id: `retry-${config.url}`,
+      duration: delay
+    });
+
+    // Wait for delay
+    await new Promise(resolve => setTimeout(resolve, delay));
+
+    // Clear retry toast
+    toast.dismiss(`retry-${config.url}`);
+
+    // Make new request
+    return api(config);
   }
+);
 
-  // Set retry count
-  config.__retryCount = config.__retryCount || 0;
-
-  // Max retries
-  if (config.__retryCount >= config.retry) {
-    return Promise.reject(err);
-  }
-
-  // Check if we should retry
-  if (!config.retryCondition(err)) {
-    return Promise.reject(err);
-  }
-
-  // Increase retry count
-  config.__retryCount += 1;
-
-  // Log retry attempt
-  console.log(`Retry attempt ${config.__retryCount} for:`, {
-    url: config.url,
-    method: config.method,
-    error: err.message
-  });
-
-  // Create new promise to handle backoff
-  const backoff = new Promise((resolve) => {
-    const delay = config.retryDelay(config.__retryCount);
-    setTimeout(() => {
-      console.log(`Retrying request after ${delay}ms:`, config.url);
-      resolve();
-    }, delay);
-  });
-
-  // Return promise to retry request
-  await backoff;
-  return api(config);
-});
-
-// Response interceptor to handle errors
+// Response error handler
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     // Network errors
     if (!error.response) {
-      console.error('Network error:', error.message);
+      console.error('Network error:', error);
+      const message = error.code === 'ECONNABORTED' 
+        ? 'Request timed out. Please try again.'
+        : 'Network error. Please check your connection.';
+      
+      toast.error(message, {
+        duration: 5000,
+        id: `network-error-${Date.now()}`
+      });
+      
       return Promise.reject({
         ...error,
-        message: 'Network error. Please check your connection and try again.'
+        message
       });
     }
 
-    // Log all error details for debugging
+    // Log error details
     console.error('API Error:', {
-      status: error.response.status,
-      data: error.response.data,
-      config: {
-        url: error.config.url,
-        method: error.config.method,
-        data: error.config.data
-      }
+      url: error.config?.url,
+      method: error.config?.method,
+      status: error.response?.status,
+      data: error.response?.data
     });
 
     // Handle specific status codes
     switch (error.response.status) {
       case 400:
-        // Bad request - validation error
         const validationError = error.response.data?.details || error.response.data?.message;
-        return Promise.reject({
-          ...error,
-          message: validationError || 'Invalid data. Please check your inputs and try again.'
-        });
+        toast.error(validationError || 'Invalid data. Please check your inputs.');
+        break;
       case 401:
-        // Token expired or invalid
         localStorage.removeItem('token');
         window.location.href = '/login';
+        toast.error('Session expired. Please login again.');
         break;
       case 403:
-        // Trial limit or permission error
-        const trialError = error.response.data?.message;
-        return Promise.reject({
-          ...error,
-          message: trialError || 'Access denied. Please check your permissions.'
-        });
+        toast.error(error.response.data?.message || 'Access denied.');
+        break;
+      case 404:
+        toast.error('Resource not found.');
+        break;
+      case 429:
+        toast.error('Too many requests. Please try again later.');
+        break;
       case 500:
-        // Server error
-        const serverError = error.response.data?.details || error.response.data?.message;
-        return Promise.reject({
-          ...error,
-          message: serverError || 'Server error. Please try again in a few moments.'
-        });
+        toast.error('Server error. Please try again later.');
+        break;
       case 503:
-        // Service unavailable
-        return Promise.reject({
-          ...error,
-          message: 'Service temporarily unavailable. Please try again later.'
-        });
+        toast.error('Service temporarily unavailable.');
+        break;
       default:
-        // Unknown error
-        const errorMessage = error.response.data?.message || error.message;
-        return Promise.reject({
-          ...error,
-          message: errorMessage || 'An unexpected error occurred. Please try again.'
-        });
+        toast.error('An unexpected error occurred.');
     }
 
     return Promise.reject(error);
