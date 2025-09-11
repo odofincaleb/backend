@@ -7,7 +7,6 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 
 const logger = require('./utils/logger');
-const { testConnection } = require('./database/connection');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -17,9 +16,6 @@ const wordpressRoutes = require('./routes/wordpress');
 const licenseRoutes = require('./routes/license');
 const adminRoutes = require('./routes/admin');
 const titleQueueRoutes = require('./routes/titleQueue');
-
-// Import services
-const campaignScheduler = require('./services/campaignScheduler');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -137,31 +133,36 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-const startServer = async () => {
-  const server = app.listen(PORT, () => {
-    logger.info(`🚀 Fiddy AutoPublisher API server running on port ${PORT}`);
-    logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-    logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
-  });
-
-  // Handle graceful shutdown
-  process.on('SIGTERM', () => {
-    logger.info('Received SIGTERM. Starting graceful shutdown...');
-    server.close(() => {
-      logger.info('Server closed');
-      process.exit(0);
+const startServer = () => {
+  try {
+    const server = app.listen(PORT, () => {
+      logger.info(`🚀 Fiddy AutoPublisher API server running on port ${PORT}`);
+      logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
     });
-  });
 
-  process.on('SIGINT', () => {
-    logger.info('Received SIGINT. Starting graceful shutdown...');
-    server.close(() => {
-      logger.info('Server closed');
-      process.exit(0);
+    // Handle graceful shutdown
+    process.on('SIGTERM', () => {
+      logger.info('Received SIGTERM. Starting graceful shutdown...');
+      server.close(() => {
+        logger.info('Server closed');
+        process.exit(0);
+      });
     });
-  });
 
-  return server;
+    process.on('SIGINT', () => {
+      logger.info('Received SIGINT. Starting graceful shutdown...');
+      server.close(() => {
+        logger.info('Server closed');
+        process.exit(0);
+      });
+    });
+
+    return server;
+  } catch (error) {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
+  }
 };
 
 // Start the server

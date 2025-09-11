@@ -37,3 +37,6 @@ router.get('/content-types', authenticateToken, (req, res) => {
 });
 
 // Rest of the file remains the same...
+
+// Export the router
+module.exports = router;
