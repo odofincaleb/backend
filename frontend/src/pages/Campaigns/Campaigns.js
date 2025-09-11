@@ -5,7 +5,7 @@ import { Card, Button, Badge } from '../../styles/GlobalStyles';
 import { Link, useNavigate } from 'react-router-dom';
 import { campaignsAPI } from '../../services/api';
 import toast from 'react-hot-toast';
-import { useAuth } from '../../contexts/AuthContext';
+// import { useAuth } from '../../contexts/AuthContext';
 
 const CampaignsContainer = styled.div`
   max-width: 1200px;

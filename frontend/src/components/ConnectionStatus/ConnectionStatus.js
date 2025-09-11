@@ -38,7 +38,7 @@ const StatusContainer = styled.div`
 
 const ConnectionStatus = () => {
   const [status, setStatus] = useState('checking');
-  const [lastConnected, setLastConnected] = useState(Date.now());
+  const [, setLastConnected] = useState(Date.now());
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 5;
   const RETRY_DELAY = 5000; // 5 seconds

@@ -228,7 +228,7 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.postsPublishedThisMonth]);
 
   useEffect(() => {
     fetchDashboardStats();
