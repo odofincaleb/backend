@@ -15,13 +15,17 @@ const createCampaignSchema = Joi.object({
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle').default('pas'),
   imperfectionList: Joi.array().items(Joi.string()).default([]),
   schedule: Joi.string()
-    .pattern(/^\d+(?:\.\d+)?h$/i)
     .optional()
-    .description('Schedule in hours with h suffix (e.g., 0.10h, 0.50h, 1.00h, 24.00h)')
+    .description('Schedule in hours with optional h suffix (e.g., 0.10, 0.50, 1.00, 24.00)')
     .custom((value, helpers) => {
       if (!value) return value;
-      const hours = Number(value.replace(/h$/i, ''));
-      if (isNaN(hours) || hours < 0.1 || hours > 168) {
+      // Remove 'h' suffix if present
+      const cleanValue = value.toLowerCase().replace(/h$/, '');
+      const hours = Number(cleanValue);
+      if (isNaN(hours)) {
+        return helpers.error('string.schedule');
+      }
+      if (hours < 0.1 || hours > 168) {
         return helpers.error('string.schedule');
       }
       // Format with exactly 2 decimal places
@@ -77,13 +81,17 @@ const updateCampaignSchema = Joi.object({
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle'),
   imperfectionList: Joi.array().items(Joi.string()),
   schedule: Joi.string()
-    .pattern(/^\d+(?:\.\d+)?h$/i)
     .optional()
-    .description('Schedule in hours with h suffix (e.g., 0.10h, 0.50h, 1.00h, 24.00h)')
+    .description('Schedule in hours with optional h suffix (e.g., 0.10, 0.50, 1.00, 24.00)')
     .custom((value, helpers) => {
       if (!value) return value;
-      const hours = Number(value.replace(/h$/i, ''));
-      if (isNaN(hours) || hours < 0.1 || hours > 168) {
+      // Remove 'h' suffix if present
+      const cleanValue = value.toLowerCase().replace(/h$/, '');
+      const hours = Number(cleanValue);
+      if (isNaN(hours)) {
+        return helpers.error('string.schedule');
+      }
+      if (hours < 0.1 || hours > 168) {
         return helpers.error('string.schedule');
       }
       // Format with exactly 2 decimal places
@@ -366,11 +374,12 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
           throw new Error('Invalid schedule hours: not a number');
         }
       } else if (schedule) {
-        const match = schedule.match(/^(\d+(?:\.\d{2})?)[hH]$/);
-        if (!match) {
-          throw new Error('Invalid schedule format. Must be like "0.10h", "1.00h", "24.00h"');
+        // Remove 'h' suffix if present
+        const cleanSchedule = schedule.toLowerCase().replace(/h$/, '');
+        hours = Number(cleanSchedule);
+        if (isNaN(hours)) {
+          throw new Error('Invalid schedule format. Must be a number like "0.10", "1.00", "24.00"');
         }
-        hours = Number(match[1]);
       } else {
         throw new Error('Either schedule or scheduleHours must be provided');
       }
