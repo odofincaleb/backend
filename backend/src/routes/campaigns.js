@@ -14,11 +14,13 @@ const createCampaignSchema = Joi.object({
   toneOfVoice: Joi.string().valid('conversational', 'formal', 'humorous', 'storytelling').default('conversational'),
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle').default('pas'),
   imperfectionList: Joi.array().items(Joi.string()).default([]),
-  schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
+  schedule: Joi.string()
+    .pattern(/^\d+\.\d{2}h$/)
+    .optional()
+    .description('Schedule in hours with h suffix (e.g., 0.10h, 0.50h, 1.00h, 24.00h)'),
   scheduleHours: Joi.number()
     .min(0.1)
     .max(168)
-    .precision(2)
     .custom((value, helpers) => {
       // Convert to number with 2 decimal places
       const hours = Number(Number(value).toFixed(2));
@@ -67,11 +69,13 @@ const updateCampaignSchema = Joi.object({
   toneOfVoice: Joi.string().valid('conversational', 'formal', 'humorous', 'storytelling'),
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle'),
   imperfectionList: Joi.array().items(Joi.string()),
-  schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
+  schedule: Joi.string()
+    .pattern(/^\d+\.\d{2}h$/)
+    .optional()
+    .description('Schedule in hours with h suffix (e.g., 0.10h, 0.50h, 1.00h, 24.00h)'),
   scheduleHours: Joi.number()
     .min(0.1)
     .max(168)
-    .precision(2)
     .custom((value, helpers) => {
       // Convert to number with 2 decimal places
       const hours = Number(Number(value).toFixed(2));
