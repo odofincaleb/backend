@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const http = require('http');
 
 const logger = require('./utils/logger');
 
@@ -51,8 +52,9 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Keep-Alive', 'Connection'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range', 'Keep-Alive', 'Connection'],
+  maxAge: 86400 // 24 hours
 };
 
 app.use(cors(corsOptions));
@@ -87,7 +89,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint (before all other routes)
 app.get('/health', (req, res) => {
-  // Simple health check that doesn't depend on database
   res.status(200).json({
     status: 'OK',
     timestamp: new Date().toISOString(),
@@ -132,10 +133,45 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Create HTTP server with custom settings
+const server = http.createServer({
+  keepAlive: true,
+  keepAliveTimeout: 60000, // 60 seconds
+  headersTimeout: 65000, // slightly higher than keepAliveTimeout
+  requestTimeout: 30000, // 30 seconds
+  timeout: 30000 // 30 seconds
+}, app);
+
+// Add error handlers
+server.on('error', (error) => {
+  logger.error('Server error:', error);
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  switch (error.code) {
+    case 'EACCES':
+      logger.error(`Port ${PORT} requires elevated privileges`);
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      logger.error(`Port ${PORT} is already in use`);
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+});
+
+server.on('connection', (socket) => {
+  // Enable keep-alive on all sockets
+  socket.setKeepAlive(true, 30000); // 30 seconds
+});
+
 // Start server
 const startServer = () => {
   try {
-    const server = app.listen(PORT, () => {
+    server.listen(PORT, () => {
       logger.info(`🚀 Fiddy AutoPublisher API server running on port ${PORT}`);
       logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
       logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
@@ -148,6 +184,12 @@ const startServer = () => {
         logger.info('Server closed');
         process.exit(0);
       });
+
+      // Force close after 30 seconds
+      setTimeout(() => {
+        logger.warn('Could not close connections in time, forcefully shutting down');
+        process.exit(1);
+      }, 30000);
     });
 
     process.on('SIGINT', () => {
@@ -156,6 +198,12 @@ const startServer = () => {
         logger.info('Server closed');
         process.exit(0);
       });
+
+      // Force close after 30 seconds
+      setTimeout(() => {
+        logger.warn('Could not close connections in time, forcefully shutting down');
+        process.exit(1);
+      }, 30000);
     });
 
     return server;
@@ -166,6 +214,6 @@ const startServer = () => {
 };
 
 // Start the server
-const server = startServer();
+const serverInstance = startServer();
 
 module.exports = app;
