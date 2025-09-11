@@ -29,77 +29,87 @@ app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-    },
-  },
+  contentSecurityPolicy: false, // Disable CSP for development
+  crossOriginEmbedderPolicy: false // Allow embedding in iframes
 }));
 
 // CORS configuration
-app.use(cors({
-  origin: function (origin, callback) {
+const corsOptions = {
+  origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
+    // List of allowed origins
     const allowedOrigins = [
       'http://localhost:3000',
-      'http://localhost:3001',
-      'https://yourdomain.com',
+      'http://localhost:5000',
       'https://fiddy-autopublisher.vercel.app',
-      'https://fiddy-autopublisher.netlify.app'
+      'https://backend-production-8c02.up.railway.app'
     ];
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
+
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
       callback(null, true);
     } else {
-      callback(null, true); // Allow all origins for testing
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
+};
+
+app.use(cors(corsOptions));
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: {
-    error: 'Too many requests from this IP, please try again later.',
-    retryAfter: Math.ceil((parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000) / 1000)
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // limit each IP to 1000 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/health';
+  }
 });
 
+// Apply rate limiter to all routes
 app.use(limiter);
 
 // Compression middleware
 app.use(compression());
 
 // Logging middleware
-app.use(morgan('combined', {
-  stream: {
-    write: (message) => logger.http(message.trim())
-  }
-}));
+if (process.env.NODE_ENV !== 'test') {
+  app.use(morgan('dev'));
+}
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development'
-  });
+// Health check endpoint (before all other routes)
+app.get('/health', async (req, res) => {
+  try {
+    // Test database connection
+    const dbConnected = await testConnection();
+    
+    res.status(200).json({
+      status: dbConnected ? 'OK' : 'Database Error',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || 'development',
+      database: dbConnected ? 'Connected' : 'Disconnected'
+    });
+  } catch (error) {
+    logger.error('Health check failed:', error);
+    res.status(503).json({
+      status: 'Error',
+      timestamp: new Date().toISOString(),
+      error: error.message
+    });
+  }
 });
 
 // API routes
@@ -111,59 +121,68 @@ app.use('/api/license', licenseRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/title-queue', titleQueueRoutes);
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    error: 'Route not found',
-    message: `Cannot ${req.method} ${req.originalUrl}`
-  });
-});
-
 // Global error handler
 app.use((err, req, res, next) => {
-  logger.error('Unhandled error:', {
-    error: err.message,
-    stack: err.stack,
-    url: req.url,
-    method: req.method,
-    ip: req.ip
-  });
-
-  // Don't leak error details in production
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  logger.error('Global error handler:', err);
   
+  // Handle specific error types
+  if (err.name === 'UnauthorizedError') {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Invalid or expired token'
+    });
+  }
+  
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({
+      error: 'Validation Error',
+      message: err.message
+    });
+  }
+  
+  // Default error response
   res.status(err.status || 500).json({
-    error: 'Internal server error',
-    message: isDevelopment ? err.message : 'Something went wrong',
-    ...(isDevelopment && { stack: err.stack })
+    error: err.name || 'Internal Server Error',
+    message: err.message || 'Something went wrong',
+    details: process.env.NODE_ENV === 'development' ? err.stack : undefined
   });
 });
 
-// Graceful shutdown
+// Graceful shutdown handler
 const gracefulShutdown = async (signal) => {
-  logger.info(`Received ${signal}. Starting graceful shutdown...`);
-  
   try {
+    logger.info(`Received ${signal}. Starting graceful shutdown...`);
+
     // Stop campaign scheduler
-    campaignScheduler.stop();
-    logger.info('Campaign scheduler stopped');
-    
+    if (campaignScheduler) {
+      campaignScheduler.stop();
+      logger.info('Campaign scheduler stopped');
+    }
+
     // Close database connections
-    const { closePool } = require('./database/connection');
-    await closePool();
-    
+    try {
+      const { pool } = require('./database/connection');
+      await pool.end();
+      logger.info('Database connections closed');
+    } catch (error) {
+      logger.error('Error closing database connections:', error);
+    }
+
     // Close server
-    server.close(() => {
-      logger.info('Server closed successfully');
+    if (server) {
+      server.close(() => {
+        logger.info('Server closed');
+        process.exit(0);
+      });
+
+      // Force close after 10 seconds
+      setTimeout(() => {
+        logger.warn('Could not close connections in time, forcefully shutting down');
+        process.exit(1);
+      }, 10000);
+    } else {
       process.exit(0);
-    });
-    
-    // Force close after 10 seconds
-    setTimeout(() => {
-      logger.error('Forced shutdown after timeout');
-      process.exit(1);
-    }, 10000);
-    
+    }
   } catch (error) {
     logger.error('Error during graceful shutdown:', error);
     process.exit(1);
@@ -210,4 +229,3 @@ const startServer = async () => {
 const server = startServer();
 
 module.exports = app;
-

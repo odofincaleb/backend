@@ -7,9 +7,13 @@ const CHECK_INTERVAL = 5000; // Check every 5 seconds
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
+// Get base URL without /api suffix
+const baseUrl = (process.env.REACT_APP_API_URL || 'https://backend-production-8c02.up.railway.app/api')
+  .replace(/\/api\/?$/, '');
+
 // Create a separate axios instance for health checks
 const healthCheck = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'https://backend-production-8c02.up.railway.app/api',
+  baseURL: baseUrl,
   timeout: 3000,
   validateStatus: (status) => status === 200 // Only accept 200 OK
 });
