@@ -11,14 +11,27 @@ const api = axios.create({
   },
   // Add retry configuration
   validateStatus: function (status) {
-    // Consider only 5xx errors as failures for retry
+    // Consider only 5xx errors and network errors as failures for retry
     return status < 500;
   },
+  retry: 3, // Number of retries
+  retryDelay: (retryCount) => {
+    return 1000 * Math.pow(2, retryCount); // Exponential backoff
+  },
+  retryCondition: (error) => {
+    // Retry on network errors and 5xx errors
+    return (
+      !error.response || 
+      error.code === 'ECONNABORTED' || 
+      error.code === 'ECONNRESET' ||
+      (error.response && error.response.status >= 500)
+    );
+  }
 });
 
 // Add retry interceptor
 api.interceptors.response.use(undefined, async (err) => {
-  const { config, message } = err;
+  const { config } = err;
   if (!config || !config.retry) {
     return Promise.reject(err);
   }
@@ -26,20 +39,33 @@ api.interceptors.response.use(undefined, async (err) => {
   // Set retry count
   config.__retryCount = config.__retryCount || 0;
   
-  // Max retries (3 attempts total)
-  if (config.__retryCount >= 2) {
+  // Max retries
+  if (config.__retryCount >= config.retry) {
+    return Promise.reject(err);
+  }
+
+  // Check if we should retry
+  if (!config.retryCondition(err)) {
     return Promise.reject(err);
   }
 
   // Increase retry count
   config.__retryCount += 1;
 
+  // Log retry attempt
+  console.log(`Retry attempt ${config.__retryCount} for:`, {
+    url: config.url,
+    method: config.method,
+    error: err.message
+  });
+
   // Create new promise to handle backoff
   const backoff = new Promise((resolve) => {
+    const delay = config.retryDelay(config.__retryCount);
     setTimeout(() => {
-      console.log('Retrying request:', config.url);
+      console.log(`Retrying request after ${delay}ms:`, config.url);
       resolve();
-    }, 1000 * Math.pow(2, config.__retryCount)); // Exponential backoff
+    }, delay);
   });
 
   // Return promise to retry request
@@ -108,27 +134,58 @@ api.interceptors.response.use(
       });
     }
 
+    // Log all error details for debugging
+    console.error('API Error:', {
+      status: error.response.status,
+      data: error.response.data,
+      config: {
+        url: error.config.url,
+        method: error.config.method,
+        data: error.config.data
+      }
+    });
+
     // Handle specific status codes
     switch (error.response.status) {
+      case 400:
+        // Bad request - validation error
+        const validationError = error.response.data?.details || error.response.data?.message;
+        return Promise.reject({
+          ...error,
+          message: validationError || 'Invalid data. Please check your inputs and try again.'
+        });
       case 401:
         // Token expired or invalid
         localStorage.removeItem('token');
         window.location.href = '/login';
         break;
-      case 500:
-        console.error('Server error:', error.response.data);
+      case 403:
+        // Trial limit or permission error
+        const trialError = error.response.data?.message;
         return Promise.reject({
           ...error,
-          message: 'Server error. Please try again in a few moments.'
+          message: trialError || 'Access denied. Please check your permissions.'
+        });
+      case 500:
+        // Server error
+        const serverError = error.response.data?.details || error.response.data?.message;
+        return Promise.reject({
+          ...error,
+          message: serverError || 'Server error. Please try again in a few moments.'
         });
       case 503:
-        console.error('Service unavailable:', error.response.data);
+        // Service unavailable
         return Promise.reject({
           ...error,
           message: 'Service temporarily unavailable. Please try again later.'
         });
       default:
-        console.error('API error:', error.response.data);
+        // Unknown error
+        const errorMessage = error.response.data?.message || error.message;
+        return Promise.reject({
+          ...error,
+          message: errorMessage || 'An unexpected error occurred. Please try again.'
+        });
     }
 
     return Promise.reject(error);

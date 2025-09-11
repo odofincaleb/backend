@@ -217,34 +217,18 @@ const CreateCampaign = () => {
     } catch (error) {
       console.error('Error saving campaign:', error);
       
-      // Provide more specific error messages
-      if (error.code === 'ERR_NETWORK' || error.message.includes('timeout')) {
-        toast.error('Network timeout. Please check your connection and try again.');
-      } else if (error.response?.status === 403) {
-        // Handle trial limit errors
-        const errorData = error.response.data;
-        if (errorData.error === 'Campaign limit reached') {
-          toast.error(
-            `Trial Limit Reached: ${errorData.message}`,
-            {
-              duration: 6000,
-              style: {
-                background: '#fee2e2',
-                color: '#dc2626',
-                border: '1px solid #fecaca'
-              }
-            }
-          );
-        } else {
-          toast.error('Access denied. Please check your permissions.');
-        }
-      } else if (error.response?.status === 500) {
-        toast.error('Server error. Please try again in a few moments.');
-      } else if (error.response?.status === 400) {
-        toast.error('Invalid data. Please check your inputs and try again.');
-      } else {
-        toast.error(isEditing ? 'Failed to update campaign' : 'Failed to create campaign');
-      }
+      // Show error message from API or fallback
+      const errorMessage = error.message || (isEditing ? 'Failed to update campaign' : 'Failed to create campaign');
+      
+      // Show error with appropriate styling
+      toast.error(errorMessage, {
+        duration: 6000,
+        style: error.response?.status === 403 ? {
+          background: '#fee2e2',
+          color: '#dc2626',
+          border: '1px solid #fecaca'
+        } : undefined
+      });
     } finally {
       setLoading(false);
     }

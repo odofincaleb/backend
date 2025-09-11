@@ -228,7 +228,7 @@ const TitleQueue = () => {
       setGenerating(true);
       const response = await api.post(`/title-queue/${campaignId}/generate`, { count: 5 });
       toast.success(`Generated ${response.data.titles.length} new titles`);
-      fetchTitles(); // Refresh the list
+        fetchTitles(); // Refresh the list
     } catch (error) {
       console.error('Error generating titles:', error);
       toast.error('Failed to generate titles');
@@ -244,12 +244,12 @@ const TitleQueue = () => {
     try {
       setAddingTitle(true);
       const response = await api.post(`/title-queue/${campaignId}`, {
-        title: newTitle.trim()
+          title: newTitle.trim()
       });
       
-      toast.success('Title added successfully');
-      setNewTitle('');
-      fetchTitles(); // Refresh the list
+        toast.success('Title added successfully');
+        setNewTitle('');
+        fetchTitles(); // Refresh the list
     } catch (error) {
       console.error('Error adding title:', error);
       toast.error('Failed to add title');
@@ -261,8 +261,8 @@ const TitleQueue = () => {
   const updateTitleStatus = async (titleId, status) => {
     try {
       const response = await api.put(`/title-queue/${titleId}/status`, { status });
-      toast.success(`Title ${status} successfully`);
-      fetchTitles(); // Refresh the list
+        toast.success(`Title ${status} successfully`);
+        fetchTitles(); // Refresh the list
     } catch (error) {
       console.error(`Error ${status}ing title:`, error);
       toast.error(`Failed to ${status} title`);
@@ -274,8 +274,8 @@ const TitleQueue = () => {
 
     try {
       await api.delete(`/title-queue/${titleId}`);
-      toast.success('Title deleted successfully');
-      fetchTitles(); // Refresh the list
+        toast.success('Title deleted successfully');
+        fetchTitles(); // Refresh the list
     } catch (error) {
       console.error('Error deleting title:', error);
       toast.error('Failed to delete title');

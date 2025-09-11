@@ -1,54 +1,55 @@
 import axios from 'axios';
 
-// Track connection status
-let isConnected = true;
+let isOnline = true;
 let lastCheckTime = 0;
-const CHECK_INTERVAL = 30000; // 30 seconds
+let checkInProgress = false;
+const CHECK_INTERVAL = 5000; // Check every 5 seconds
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000;
 
-// Create a separate instance for health checks
-const healthCheck = axios.create({
-  timeout: 5000, // Short timeout for health checks
-});
-
-// Check connection to Railway backend
 export const checkConnection = async () => {
   const now = Date.now();
-  
-  // Only check every 30 seconds
-  if (now - lastCheckTime < CHECK_INTERVAL) {
-    return isConnected;
+  if (now - lastCheckTime < CHECK_INTERVAL && isOnline) {
+    return isOnline; // Return cached status if recently checked and online
   }
+
+  // Prevent multiple simultaneous checks
+  if (checkInProgress) {
+    return isOnline;
+  }
+
+  checkInProgress = true;
 
   try {
-    // Try production URL first
-    await healthCheck.get('https://backend-production-8c02.up.railway.app/health');
-    isConnected = true;
+    // Try up to MAX_RETRIES times with exponential backoff
+    for (let i = 0; i < MAX_RETRIES; i++) {
+      try {
+        await axios.get(
+          process.env.REACT_APP_API_URL || 'https://backend-production-8c02.up.railway.app/api' + '/health',
+          { 
+            timeout: 3000,
+            validateStatus: (status) => status === 200 // Only accept 200 OK
+          }
+        );
+        isOnline = true;
+        break; // Success, exit retry loop
+      } catch (error) {
+        if (i === MAX_RETRIES - 1) {
+          // Last attempt failed
+          isOnline = false;
+          throw error;
+        }
+        // Wait with exponential backoff before retrying
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, i)));
+      }
+    }
   } catch (error) {
-    console.warn('Railway backend connection failed:', error.message);
-    isConnected = false;
+    console.error('Connection check failed:', error.message);
+    isOnline = false;
+  } finally {
+    lastCheckTime = now;
+    checkInProgress = false;
   }
 
-  lastCheckTime = now;
-  return isConnected;
+  return isOnline;
 };
-
-// Get current connection status
-export const getConnectionStatus = () => isConnected;
-
-// Subscribe to connection changes
-const subscribers = new Set();
-
-export const subscribeToConnection = (callback) => {
-  subscribers.add(callback);
-  return () => subscribers.delete(callback);
-};
-
-// Start periodic connection checks
-setInterval(async () => {
-  const prevStatus = isConnected;
-  const newStatus = await checkConnection();
-  
-  if (prevStatus !== newStatus) {
-    subscribers.forEach(callback => callback(newStatus));
-  }
-}, CHECK_INTERVAL);
