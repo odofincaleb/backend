@@ -15,16 +15,23 @@ const createCampaignSchema = Joi.object({
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle').default('pas'),
   imperfectionList: Joi.array().items(Joi.string()).default([]),
   schedule: Joi.string()
-    .pattern(/^\d+\.\d{2}h$/)
+    .pattern(/^\d+\.\d{2}h$/i)
     .optional()
-    .description('Schedule in hours with h suffix (e.g., 0.10h, 0.50h, 1.00h, 24.00h)'),
+    .description('Schedule in hours with h suffix (e.g., 0.10h, 0.50h, 1.00h, 24.00h)')
+    .custom((value, helpers) => {
+      if (!value) return value;
+      const hours = Number(value.replace(/h$/i, ''));
+      if (isNaN(hours) || hours < 0.1 || hours > 168) {
+        return helpers.error('string.schedule');
+      }
+      return value.toLowerCase();
+    }),
   scheduleHours: Joi.number()
     .min(0.1)
     .max(168)
     .custom((value, helpers) => {
-      // Convert to number with 2 decimal places
+      if (value === undefined || value === null) return value;
       const hours = Number(Number(value).toFixed(2));
-      // Validate the value
       if (isNaN(hours)) {
         return helpers.error('number.base');
       }
@@ -34,7 +41,6 @@ const createCampaignSchema = Joi.object({
       if (hours > 168) {
         return helpers.error('number.max', { limit: 168 });
       }
-      // Return the properly formatted number
       return hours;
     }, 'validate schedule hours')
     .optional()
@@ -70,16 +76,23 @@ const updateCampaignSchema = Joi.object({
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle'),
   imperfectionList: Joi.array().items(Joi.string()),
   schedule: Joi.string()
-    .pattern(/^\d+\.\d{2}h$/)
+    .pattern(/^\d+\.\d{2}h$/i)
     .optional()
-    .description('Schedule in hours with h suffix (e.g., 0.10h, 0.50h, 1.00h, 24.00h)'),
+    .description('Schedule in hours with h suffix (e.g., 0.10h, 0.50h, 1.00h, 24.00h)')
+    .custom((value, helpers) => {
+      if (!value) return value;
+      const hours = Number(value.replace(/h$/i, ''));
+      if (isNaN(hours) || hours < 0.1 || hours > 168) {
+        return helpers.error('string.schedule');
+      }
+      return value.toLowerCase();
+    }),
   scheduleHours: Joi.number()
     .min(0.1)
     .max(168)
     .custom((value, helpers) => {
-      // Convert to number with 2 decimal places
+      if (value === undefined || value === null) return value;
       const hours = Number(Number(value).toFixed(2));
-      // Validate the value
       if (isNaN(hours)) {
         return helpers.error('number.base');
       }
@@ -89,7 +102,6 @@ const updateCampaignSchema = Joi.object({
       if (hours > 168) {
         return helpers.error('number.max', { limit: 168 });
       }
-      // Return the properly formatted number
       return hours;
     }, 'validate schedule hours')
     .optional()
@@ -342,58 +354,46 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
       isNumber: !isNaN(scheduleHours)
     });
     
-    if (scheduleHours !== undefined) {
-      try {
-        // Convert to number and validate
-        const numericHours = Number(scheduleHours);
-        if (isNaN(numericHours)) {
+    // Process schedule values
+    try {
+      // Get hours from either scheduleHours or schedule
+      let hours;
+      if (scheduleHours !== undefined) {
+        hours = Number(scheduleHours);
+        if (isNaN(hours)) {
           throw new Error('Invalid schedule hours: not a number');
         }
-        if (numericHours < 0.1 || numericHours > 168) {
-          throw new Error(`Invalid schedule hours: ${numericHours} (must be between 0.1 and 168)`);
+      } else if (schedule) {
+        const match = schedule.match(/^(\d+(?:\.\d{2})?)[hH]$/);
+        if (!match) {
+          throw new Error('Invalid schedule format. Must be like "0.10h", "1.00h", "24.00h"');
         }
-        
-        // Use custom hours (ensure 2 decimal places)
-        finalScheduleHours = Number(numericHours.toFixed(2));
-        // Format with exactly 2 decimal places
-        finalSchedule = finalScheduleHours.toFixed(2) + 'h';
-        
-        logger.info('Processed custom schedule hours:', { 
-          input: scheduleHours,
-          numeric: numericHours,
-          final: finalScheduleHours,
-          schedule: finalSchedule
-        });
-      } catch (error) {
-        logger.error('Schedule hours processing error:', error);
-        return res.status(400).json({
-          error: 'Validation error',
-          message: error.message
-        });
+        hours = Number(match[1]);
+      } else {
+        throw new Error('Either schedule or scheduleHours must be provided');
       }
-    } else {
-      // Use legacy schedule format
-      try {
-        const hours = Number(schedule.replace('h', ''));
-        if (isNaN(hours)) {
-          throw new Error('Invalid legacy schedule format');
-        }
-        finalScheduleHours = Number(hours.toFixed(2));
-        finalSchedule = finalScheduleHours.toFixed(2) + 'h';
-        logger.info('Processed legacy schedule:', { 
-          input: schedule,
-          hours,
-          finalScheduleHours,
-          finalSchedule,
-          schedule: finalSchedule
-        });
-      } catch (error) {
-        logger.error('Legacy schedule processing error:', error);
-        return res.status(400).json({
-          error: 'Validation error',
-          message: 'Invalid schedule format'
-        });
+
+      // Validate hours range
+      if (hours < 0.1 || hours > 168) {
+        throw new Error(`Invalid hours: ${hours} (must be between 0.10 and 168.00)`);
       }
+
+      // Format with exactly 2 decimal places
+      finalScheduleHours = Number(hours.toFixed(2));
+      finalSchedule = finalScheduleHours.toFixed(2) + 'h';
+
+      logger.info('Processed schedule:', {
+        input: { scheduleHours, schedule },
+        hours,
+        finalScheduleHours,
+        finalSchedule
+      });
+    } catch (error) {
+      logger.error('Schedule processing error:', error);
+      return res.status(400).json({
+        error: 'Validation error',
+        message: error.message
+      });
     }
     
     // Set default content types if none provided (all 15 types)
