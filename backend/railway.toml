@@ -1,6 +1,7 @@
 [build]
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
+buildCommand = "docker build -t backend ."
 
 [deploy]
 startCommand = "npm start"
@@ -13,3 +14,7 @@ restartPolicyMaxRetries = 5
 name = "backend"
 internal_port = 5000
 auto_deploy_on = ["main", "master"]
+
+[service.env]
+NODE_ENV = "production"
+PORT = "5000"
