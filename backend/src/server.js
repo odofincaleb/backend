@@ -9,14 +9,14 @@ const http = require('http');
 
 const logger = require('./utils/logger');
 
-// Import routes (commented out temporarily to test health check)
-// const authRoutes = require('./routes/auth');
-// const userRoutes = require('./routes/users');
-// const campaignRoutes = require('./routes/campaigns');
-// const wordpressRoutes = require('./routes/wordpress');
-// const licenseRoutes = require('./routes/license');
-// const adminRoutes = require('./routes/admin');
-// const titleQueueRoutes = require('./routes/titleQueue');
+// Import routes
+const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
+const campaignRoutes = require('./routes/campaigns');
+const wordpressRoutes = require('./routes/wordpress');
+const licenseRoutes = require('./routes/license');
+const adminRoutes = require('./routes/admin');
+const titleQueueRoutes = require('./routes/titleQueue');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -94,14 +94,14 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint is already defined above
 
-// API routes (commented out temporarily to test health check)
-// app.use('/api/auth', authRoutes);
-// app.use('/api/users', userRoutes);
-// app.use('/api/campaigns', campaignRoutes);
-// app.use('/api/wordpress', wordpressRoutes);
-// app.use('/api/license', licenseRoutes);
-// app.use('/api/admin', adminRoutes);
-// app.use('/api/title-queue', titleQueueRoutes);
+// API routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/campaigns', campaignRoutes);
+app.use('/api/wordpress', wordpressRoutes);
+app.use('/api/license', licenseRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/title-queue', titleQueueRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
