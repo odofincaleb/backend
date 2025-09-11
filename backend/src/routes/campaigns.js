@@ -15,7 +15,7 @@ const createCampaignSchema = Joi.object({
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle').default('pas'),
   imperfectionList: Joi.array().items(Joi.string()).default([]),
   schedule: Joi.string()
-    .pattern(/^\d+\.\d{2}h$/i)
+    .pattern(/^\d+(?:\.\d+)?h$/i)
     .optional()
     .description('Schedule in hours with h suffix (e.g., 0.10h, 0.50h, 1.00h, 24.00h)')
     .custom((value, helpers) => {
@@ -24,7 +24,8 @@ const createCampaignSchema = Joi.object({
       if (isNaN(hours) || hours < 0.1 || hours > 168) {
         return helpers.error('string.schedule');
       }
-      return value.toLowerCase();
+      // Format with exactly 2 decimal places
+      return hours.toFixed(2) + 'h';
     }),
   scheduleHours: Joi.number()
     .min(0.1)
@@ -76,7 +77,7 @@ const updateCampaignSchema = Joi.object({
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle'),
   imperfectionList: Joi.array().items(Joi.string()),
   schedule: Joi.string()
-    .pattern(/^\d+\.\d{2}h$/i)
+    .pattern(/^\d+(?:\.\d+)?h$/i)
     .optional()
     .description('Schedule in hours with h suffix (e.g., 0.10h, 0.50h, 1.00h, 24.00h)')
     .custom((value, helpers) => {
@@ -85,7 +86,8 @@ const updateCampaignSchema = Joi.object({
       if (isNaN(hours) || hours < 0.1 || hours > 168) {
         return helpers.error('string.schedule');
       }
-      return value.toLowerCase();
+      // Format with exactly 2 decimal places
+      return hours.toFixed(2) + 'h';
     }),
   scheduleHours: Joi.number()
     .min(0.1)

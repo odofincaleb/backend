@@ -184,7 +184,11 @@ const CreateCampaign = () => {
       setLoading(true);
       
       // Format schedule with 'h' suffix and ensure 2 decimal places
-      const scheduleHours = Number(data.scheduleHours).toFixed(2);
+      const scheduleHours = Number(data.scheduleHours);
+      if (isNaN(scheduleHours)) {
+        throw new Error('Invalid schedule hours');
+      }
+      const formattedHours = scheduleHours.toFixed(2);
       
       // Map form data to API format
       const campaignData = {
@@ -192,8 +196,8 @@ const CreateCampaign = () => {
         context: data.context,
         toneOfVoice: data.tone_of_voice,
         writingStyle: data.writing_style,
-        scheduleHours: parseFloat(scheduleHours),
-        schedule: `${scheduleHours}h`,
+        scheduleHours: scheduleHours,
+        schedule: `${formattedHours}h`,
         numberOfTitles: parseInt(data.numberOfTitles),
         wordpressSiteId: data.wordpress_site_id || null,
         imperfectionList: imperfectionList,
