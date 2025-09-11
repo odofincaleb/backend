@@ -1,33 +1,48 @@
 import axios from 'axios';
-import { checkConnection } from './connectionCheck';
-import toast from 'react-hot-toast';
 
-// Create axios instance with retry configuration
+// Create axios instance
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'https://backend-production-8c02.up.railway.app/api',
   timeout: 60000, // 60 seconds
   headers: {
     'Content-Type': 'application/json',
-  },
-  // Add retry configuration
-  validateStatus: function (status) {
-    // Consider only 5xx errors and network errors as failures for retry
-    return status < 500;
-  },
-  retry: 3, // Number of retries
-  retryDelay: (retryCount) => {
-    return 1000 * Math.pow(2, retryCount); // Exponential backoff
-  },
-  retryCondition: (error) => {
-    // Retry on network errors and 5xx errors
-    return (
-      !error.response || 
-      error.code === 'ECONNABORTED' || 
-      error.code === 'ECONNRESET' ||
-      (error.response && error.response.status >= 500)
-    );
   }
 });
+
+// Add auth token to requests
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Add retry configuration
+api.defaults.validateStatus = function (status) {
+  // Consider only 5xx errors and network errors as failures for retry
+  return status < 500;
+};
+
+api.defaults.retry = 3; // Number of retries
+api.defaults.retryDelay = (retryCount) => {
+  return 1000 * Math.pow(2, retryCount); // Exponential backoff
+};
+
+api.defaults.retryCondition = (error) => {
+  // Retry on network errors and 5xx errors
+  return (
+    !error.response ||
+    error.code === 'ECONNABORTED' ||
+    error.code === 'ECONNRESET' ||
+    (error.response && error.response.status >= 500)
+  );
+};
 
 // Add retry interceptor
 api.interceptors.response.use(undefined, async (err) => {
@@ -38,7 +53,7 @@ api.interceptors.response.use(undefined, async (err) => {
 
   // Set retry count
   config.__retryCount = config.__retryCount || 0;
-  
+
   // Max retries
   if (config.__retryCount >= config.retry) {
     return Promise.reject(err);
@@ -72,54 +87,6 @@ api.interceptors.response.use(undefined, async (err) => {
   await backoff;
   return api(config);
 });
-
-
-// Request interceptor to add auth token and check connection
-api.interceptors.request.use(
-  async (config) => {
-    // Check connection before making request
-    const isConnected = await checkConnection();
-    if (!isConnected) {
-      // Show toast only once per disconnection
-      if (!window.__shownDisconnectToast) {
-        toast.error('Connection to server lost. Retrying...', {
-          id: 'connection-lost',
-          duration: 5000
-        });
-        window.__shownDisconnectToast = true;
-      }
-      
-      // Retry the request when connection is restored
-      return new Promise((resolve) => {
-        const checkAndRetry = async () => {
-          const newStatus = await checkConnection();
-          if (newStatus) {
-            window.__shownDisconnectToast = false;
-            toast.success('Connection restored!', {
-              id: 'connection-restored',
-              duration: 3000
-            });
-            resolve(config);
-          } else {
-            setTimeout(checkAndRetry, 5000); // Check every 5 seconds
-          }
-        };
-        checkAndRetry();
-      });
-    }
-
-    // Add auth token
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
 
 // Response interceptor to handle errors
 api.interceptors.response.use(
@@ -194,19 +161,47 @@ api.interceptors.response.use(
 
 // Auth API
 export const authAPI = {
-  login: (email, password) => api.post('/auth/login', { email, password }),
-  register: (userData) => api.post('/auth/register', userData),
-  getProfile: () => api.get('/auth/me'),
-  changePassword: (data) => api.put('/auth/change-password', data),
-  refreshToken: () => api.post('/auth/refresh'),
+  login: async (email, password) => {
+    try {
+      const response = await api.post('/auth/login', { email, password });
+      return response;
+    } catch (error) {
+      console.error('Login API error:', error);
+      throw error;
+    }
+  },
+  register: async (userData) => {
+    try {
+      const response = await api.post('/auth/register', userData);
+      return response;
+    } catch (error) {
+      console.error('Register API error:', error);
+      throw error;
+    }
+  },
+  getProfile: async () => {
+    try {
+      const response = await api.get('/auth/me');
+      return response;
+    } catch (error) {
+      console.error('Get profile API error:', error);
+      throw error;
+    }
+  },
+  changePassword: async (data) => {
+    try {
+      const response = await api.put('/auth/change-password', data);
+      return response;
+    } catch (error) {
+      console.error('Change password API error:', error);
+      throw error;
+    }
+  }
 };
 
 // Users API
 export const usersAPI = {
-  updateProfile: (data) => api.put('/users/profile', data),
-  addApiKeys: (data) => api.post('/users/api-keys', data),
-  getApiKeys: () => api.get('/users/api-keys'),
-  deleteApiKeys: () => api.delete('/users/api-keys'),
+  updateProfile: (data) => api.put('/users/profile', data)
 };
 
 // Campaigns API
@@ -218,37 +213,30 @@ export const campaignsAPI = {
   deleteCampaign: (id) => api.delete(`/campaigns/${id}`),
   startCampaign: (id) => api.post(`/campaigns/${id}/start`),
   stopCampaign: (id) => api.post(`/campaigns/${id}/stop`),
-  getCampaignStats: (id) => api.get(`/campaigns/${id}/stats`),
-  getContentTypes: () => api.get('/campaigns/content-types'),
+  getContentTypes: () => api.get('/campaigns/content-types')
 };
 
 // WordPress API
 export const wordpressAPI = {
-  getSites: () => api.get('/wordpress/sites'),
-  addSite: (data) => api.post('/wordpress/sites', data),
-  updateSite: (id, data) => api.put(`/wordpress/sites/${id}`, data),
-  deleteSite: (id) => api.delete(`/wordpress/sites/${id}`),
-  testConnection: (id) => api.post(`/wordpress/sites/${id}/test`),
+  getSites: () => api.get('/wordpress'),
+  addSite: (data) => api.post('/wordpress', data),
+  updateSite: (id, data) => api.put(`/wordpress/${id}`, data),
+  deleteSite: (id) => api.delete(`/wordpress/${id}`),
+  testConnection: (id) => api.post(`/wordpress/${id}/test`)
 };
 
 // License API
 export const licenseAPI = {
-  activateLicense: (licenseKey) => api.post('/license/activate', { licenseKey }),
-  getLicenseStatus: () => api.get('/license/status'),
-  getSubscriptionStatus: () => api.get('/subscription/status'),
+  activate: (key) => api.post('/license/activate', { key }),
+  deactivate: () => api.post('/license/deactivate'),
+  getStatus: () => api.get('/license/status')
 };
 
-// Admin API
-export const adminAPI = {
-  generateLicenseKey: (data) => api.post('/admin/license-keys', data),
-  getLicenseKeys: () => api.get('/admin/license-keys'),
-  updateLicenseKey: (id, data) => api.put(`/admin/license-keys/${id}`, data),
-  deleteLicenseKey: (id) => api.delete(`/admin/license-keys/${id}`),
-  getUsers: () => api.get('/admin/users'),
-  getUser: (id) => api.get(`/admin/users/${id}`),
-  updateUser: (id, data) => api.put(`/admin/users/${id}`, data),
-  getSystemStats: () => api.get('/admin/stats'),
+// Title Queue API
+export const titleQueueAPI = {
+  getTitles: (campaignId) => api.get(`/title-queue/${campaignId}`),
+  approveTitle: (id) => api.post(`/title-queue/${id}/approve`),
+  rejectTitle: (id) => api.post(`/title-queue/${id}/reject`)
 };
 
 export default api;
-
