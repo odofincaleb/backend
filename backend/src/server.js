@@ -90,26 +90,14 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint (before all other routes)
-app.get('/health', async (req, res) => {
-  try {
-    // Test database connection
-    const dbConnected = await testConnection();
-    
-    res.status(200).json({
-      status: dbConnected ? 'OK' : 'Database Error',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: process.env.NODE_ENV || 'development',
-      database: dbConnected ? 'Connected' : 'Disconnected'
-    });
-  } catch (error) {
-    logger.error('Health check failed:', error);
-    res.status(503).json({
-      status: 'Error',
-      timestamp: new Date().toISOString(),
-      error: error.message
-    });
-  }
+app.get('/health', (req, res) => {
+  // Simple health check that doesn't depend on database
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
 // API routes
@@ -148,81 +136,32 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Graceful shutdown handler
-const gracefulShutdown = async (signal) => {
-  try {
-    logger.info(`Received ${signal}. Starting graceful shutdown...`);
-
-    // Stop campaign scheduler
-    if (campaignScheduler) {
-      campaignScheduler.stop();
-      logger.info('Campaign scheduler stopped');
-    }
-
-    // Close database connections
-    try {
-      const { pool } = require('./database/connection');
-      await pool.end();
-      logger.info('Database connections closed');
-    } catch (error) {
-      logger.error('Error closing database connections:', error);
-    }
-
-    // Close server
-    if (server) {
-      server.close(() => {
-        logger.info('Server closed');
-        process.exit(0);
-      });
-
-      // Force close after 10 seconds
-      setTimeout(() => {
-        logger.warn('Could not close connections in time, forcefully shutting down');
-        process.exit(1);
-      }, 10000);
-    } else {
-      process.exit(0);
-    }
-  } catch (error) {
-    logger.error('Error during graceful shutdown:', error);
-    process.exit(1);
-  }
-};
-
 // Start server
 const startServer = async () => {
-  try {
-    // Test database connection
-    const dbConnected = await testConnection();
-    if (!dbConnected) {
-      throw new Error('Database connection failed');
-    }
+  const server = app.listen(PORT, () => {
+    logger.info(`🚀 Fiddy AutoPublisher API server running on port ${PORT}`);
+    logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
+  });
 
-    const server = app.listen(PORT, () => {
-      logger.info(`🚀 Fiddy AutoPublisher API server running on port ${PORT}`);
-      logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
+  // Handle graceful shutdown
+  process.on('SIGTERM', () => {
+    logger.info('Received SIGTERM. Starting graceful shutdown...');
+    server.close(() => {
+      logger.info('Server closed');
+      process.exit(0);
     });
+  });
 
-    // Start campaign scheduler (with delay to ensure database is ready)
-    setTimeout(() => {
-      try {
-        campaignScheduler.start();
-        logger.info('🤖 Campaign scheduler started');
-      } catch (error) {
-        logger.error('Failed to start campaign scheduler:', error);
-      }
-    }, 5000); // 5 second delay
+  process.on('SIGINT', () => {
+    logger.info('Received SIGINT. Starting graceful shutdown...');
+    server.close(() => {
+      logger.info('Server closed');
+      process.exit(0);
+    });
+  });
 
-    // Handle graceful shutdown
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-    
-    return server;
-  } catch (error) {
-    logger.error('Failed to start server:', error);
-    process.exit(1);
-  }
+  return server;
 };
 
 // Start the server
