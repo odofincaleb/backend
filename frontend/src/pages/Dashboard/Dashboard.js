@@ -198,7 +198,7 @@ const Dashboard = () => {
     postsPublished: 0,
     postsThisMonth: 0,
   });
-  const [loading] = useState(true);
+  const [loading, setLoading] = useState(true);
 
   const fetchDashboardStats = async () => {
     try {
