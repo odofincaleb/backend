@@ -1,0 +1,5 @@
+[33m1c3a07c[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m)[m Fix build configuration for bcrypt
+[33m9af3b58[m Improve connection handling with keep-alive
+[33m60512c4[m Fix deployment configuration
+[33m6f281df[m Improve connection handling and retry logic
+[33m6ef0c28[m Fix auth routes and API handling

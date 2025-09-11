@@ -16,9 +16,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies with build from source
-RUN npm install --build-from-source bcrypt && \
-    npm ci --production
+# Install dependencies
+RUN npm ci
 
 # Copy app source
 COPY . .

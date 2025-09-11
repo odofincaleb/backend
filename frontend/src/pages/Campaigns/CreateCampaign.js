@@ -241,10 +241,10 @@ const CreateCampaign = () => {
 
   if (loading && isEditing) {
     return (
-      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
         <Loader className="animate-spin" size={24} />
-        <p>Loading campaign...</p>
-      </div>
+          <p>Loading campaign...</p>
+        </div>
     );
   }
 
@@ -314,7 +314,7 @@ const CreateCampaign = () => {
               step="0.01"
               min="0.10"
               max="168.00"
-              {...register('scheduleHours', {
+              {...register('scheduleHours', { 
                 required: 'Schedule is required',
                 min: {
                   value: 0.10,
@@ -363,13 +363,13 @@ const CreateCampaign = () => {
           <Label>WordPress Site *</Label>
           <Select {...register('wordpress_site_id')}>
             <option value="">Select a WordPress Site</option>
-            {wordpressSites.map(site => (
-              <option key={site.id} value={site.id}>
+              {wordpressSites.map(site => (
+                <option key={site.id} value={site.id}>
                 {site.site_name} ({site.site_url})
-              </option>
-            ))}
-          </Select>
-        </FormGroup>
+                </option>
+              ))}
+            </Select>
+          </FormGroup>
 
         <ContentTypeSelector
           selectedTypes={selectedContentTypes}

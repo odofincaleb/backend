@@ -35,7 +35,7 @@ const corsOptions = {
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-
+    
     // List of allowed origins
     const allowedOrigins = [
       'http://localhost:3000',
@@ -43,7 +43,7 @@ const corsOptions = {
       'https://fiddy-autopublisher.vercel.app',
       'https://backend-production-8c02.up.railway.app'
     ];
-
+    
     if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
       callback(null, true);
     } else {
@@ -81,7 +81,7 @@ app.use(compression());
 // Logging middleware
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
-}
+  }
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -156,7 +156,7 @@ server.on('error', (error) => {
       break;
     case 'EADDRINUSE':
       logger.error(`Port ${PORT} is already in use`);
-      process.exit(1);
+    process.exit(1);
       break;
     default:
       throw error;
@@ -205,7 +205,7 @@ const startServer = () => {
         process.exit(1);
       }, 30000);
     });
-
+    
     return server;
   } catch (error) {
     logger.error('Failed to start server:', error);
