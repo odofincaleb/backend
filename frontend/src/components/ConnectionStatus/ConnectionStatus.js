@@ -94,7 +94,7 @@ const ConnectionStatus = () => {
         });
       }
     }
-  }, [status, lastConnected, retryCount]);
+  }, [status, retryCount]);
 
   useEffect(() => {
     // Initial check

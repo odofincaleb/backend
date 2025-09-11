@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { ArrowLeft, Plus, Trash2, Check, X, Loader, RefreshCw } from 'lucide-react';
 import { Button, Input, Label, FormGroup } from '../../styles/GlobalStyles';
-import { Link, useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { Link, useParams } from 'react-router-dom';
+// import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 
@@ -193,7 +193,7 @@ const TitleQueue = () => {
   const [newTitle, setNewTitle] = useState('');
   const [addingTitle, setAddingTitle] = useState(false);
 
-  const fetchCampaign = async () => {
+  const fetchCampaign = useCallback(async () => {
     try {
       const response = await api.get(`/campaigns/${campaignId}`);
       setCampaign(response.data.campaign);
@@ -201,9 +201,9 @@ const TitleQueue = () => {
       console.error('Error fetching campaign:', error);
       toast.error('Failed to fetch campaign details');
     }
-  };
+  }, [campaignId]);
 
-  const fetchTitles = async () => {
+  const fetchTitles = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get(`/title-queue/${campaignId}`);
@@ -214,7 +214,7 @@ const TitleQueue = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [campaignId]);
 
   const generateTitles = async () => {
     try {

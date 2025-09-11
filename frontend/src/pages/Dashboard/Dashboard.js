@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
 import { 
   Target, 
@@ -198,9 +198,9 @@ const Dashboard = () => {
     postsPublished: 0,
     postsThisMonth: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
-  const fetchDashboardStats = async () => {
+  const fetchDashboardStats = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -228,7 +228,7 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchDashboardStats();

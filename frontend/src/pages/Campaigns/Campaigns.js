@@ -133,7 +133,7 @@ const Campaigns = () => {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState({});
-  const { } = useAuth();
+  // const { } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
