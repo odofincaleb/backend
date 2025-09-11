@@ -88,6 +88,7 @@ const CreateCampaign = () => {
   const [contentTypes, setContentTypes] = useState({});
   const [selectedContentTypes, setSelectedContentTypes] = useState([]);
   const [contentTypeVariables, setContentTypeVariables] = useState({});
+  const [loadingContentTypes, setLoadingContentTypes] = useState(true);
 
   const {
     register,
@@ -127,52 +128,56 @@ const CreateCampaign = () => {
 
   const fetchContentTypes = async () => {
     try {
+      setLoadingContentTypes(true);
       const response = await campaignsAPI.getContentTypes();
-      setContentTypes(response.data.contentTypes || {});
+      if (response.data.success && response.data.contentTypes) {
+        setContentTypes(response.data.contentTypes);
+      } else {
+        throw new Error('Invalid response format');
+      }
     } catch (error) {
       console.error('Error fetching content types:', error);
+      toast.error('Failed to load content types. Please try refreshing the page.');
+    } finally {
+      setLoadingContentTypes(false);
     }
   };
 
   const fetchCampaign = async () => {
     try {
-      setLoading(true);
       const response = await campaignsAPI.getCampaign(id);
       const campaign = response.data.campaign;
 
-      // Map API response to form fields
-      const formData = {
-        topic: campaign.topic,
-        context: campaign.context,
-        tone_of_voice: campaign.toneOfVoice,
-        writing_style: campaign.writingStyle,
-        scheduleHours: campaign.scheduleHours || 24,
-        numberOfTitles: campaign.numberOfTitles || 5,
-        wordpress_site_id: campaign.wordpressSite?.id || '',
-        imperfection_list: campaign.imperfectionList || []
-      };
+      // Set form values
+      setValue('topic', campaign.topic);
+      setValue('context', campaign.context);
+      setValue('tone_of_voice', campaign.tone_of_voice);
+      setValue('writing_style', campaign.writing_style);
+      setValue('scheduleHours', campaign.schedule_hours.toFixed(2));
+      setValue('numberOfTitles', campaign.number_of_titles);
+      setValue('wordpress_site_id', campaign.wordpress_site_id || '');
 
-      Object.keys(formData).forEach(key => {
-        setValue(key, formData[key]);
-      });
-
-      // Set content types and variables
-      setSelectedContentTypes(campaign.contentTypes || []);
-      setContentTypeVariables(campaign.contentTypeVariables || {});
-      setImperfectionList(formData.imperfection_list);
+      // Set other state
+      setImperfectionList(campaign.imperfection_list || []);
+      setSelectedContentTypes(campaign.content_types || []);
+      setContentTypeVariables(campaign.content_type_variables || {});
     } catch (error) {
       toast.error('Failed to fetch campaign');
       console.error('Error fetching campaign:', error);
-    } finally {
-      setLoading(false);
+      navigate('/campaigns');
     }
   };
 
   const addImperfection = () => {
-    const newImperfection = prompt('Enter imperfection to avoid:');
-    if (newImperfection && newImperfection.trim()) {
-      setImperfectionList(prev => [...prev, newImperfection.trim()]);
-    }
+    setImperfectionList(prev => [...prev, '']);
+  };
+
+  const updateImperfection = (index, value) => {
+    setImperfectionList(prev => {
+      const newList = [...prev];
+      newList[index] = value;
+      return newList;
+    });
   };
 
   const removeImperfection = (index) => {
@@ -200,7 +205,7 @@ const CreateCampaign = () => {
         schedule: `${formattedHours}h`,
         numberOfTitles: parseInt(data.numberOfTitles),
         wordpressSiteId: data.wordpress_site_id || null,
-        imperfectionList: imperfectionList,
+        imperfectionList: imperfectionList.filter(Boolean), // Remove empty strings
         contentTypes: selectedContentTypes,
         contentTypeVariables: contentTypeVariables
       };
@@ -236,20 +241,22 @@ const CreateCampaign = () => {
 
   if (loading && isEditing) {
     return (
-      <CreateCampaignContainer>
-        <div style={{ textAlign: 'center', padding: '2rem' }}>
-          <Loader className="animate-spin" size={32} />
-          <p>Loading campaign...</p>
-        </div>
-      </CreateCampaignContainer>
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <Loader className="animate-spin" size={24} />
+        <p>Loading campaign...</p>
+      </div>
     );
   }
 
   return (
     <CreateCampaignContainer>
       <Header>
-        <BackButton as={Link} to="/campaigns" variant="ghost">
-          <ArrowLeft size={20} />
+        <BackButton
+          as={Link}
+          to="/campaigns"
+          variant="ghost"
+        >
+          <ArrowLeft size={16} />
           Back to Campaigns
         </BackButton>
         <Title>{isEditing ? 'Edit Campaign' : 'Create Campaign'}</Title>
@@ -257,31 +264,31 @@ const CreateCampaign = () => {
 
       <Form onSubmit={handleSubmit(onSubmit)}>
         <FormGroup>
-          <Label htmlFor="topic">Campaign Topic *</Label>
+          <Label>Campaign Topic *</Label>
           <Input
-            id="topic"
             type="text"
             placeholder="e.g., AI and Machine Learning, Web Development, Digital Marketing"
             {...register('topic', { required: 'Topic is required' })}
+            error={errors.topic?.message}
           />
           {errors.topic && <ErrorMessage>{errors.topic.message}</ErrorMessage>}
         </FormGroup>
 
         <FormGroup>
-          <Label htmlFor="context">Content Context *</Label>
+          <Label>Content Context *</Label>
           <TextArea
-            id="context"
             placeholder="Describe the context, target audience, and content focus for this campaign..."
             rows={4}
             {...register('context', { required: 'Context is required' })}
+            error={errors.context?.message}
           />
           {errors.context && <ErrorMessage>{errors.context.message}</ErrorMessage>}
         </FormGroup>
 
         <FormRow>
           <FormGroup>
-            <Label htmlFor="tone_of_voice">Tone of Voice</Label>
-            <Select id="tone_of_voice" {...register('tone_of_voice')}>
+            <Label>Tone of Voice</Label>
+            <Select {...register('tone_of_voice')}>
               <option value="conversational">Conversational</option>
               <option value="formal">Formal</option>
               <option value="humorous">Humorous</option>
@@ -290,8 +297,8 @@ const CreateCampaign = () => {
           </FormGroup>
 
           <FormGroup>
-            <Label htmlFor="writing_style">Writing Style</Label>
-            <Select id="writing_style" {...register('writing_style')}>
+            <Label>Writing Style</Label>
+            <Select {...register('writing_style')}>
               <option value="pas">Problem-Agitation-Solution (PAS)</option>
               <option value="aida">Attention-Interest-Desire-Action (AIDA)</option>
               <option value="listicle">Listicle</option>
@@ -301,69 +308,68 @@ const CreateCampaign = () => {
 
         <FormRow>
           <FormGroup>
-            <Label htmlFor="scheduleHours">Publishing Schedule (Hours)</Label>
+            <Label>Publishing Schedule (Hours)</Label>
             <Input
-              id="scheduleHours"
-              type="text"
-              placeholder="e.g., 0.10, 0.50, 1.00, 24.00"
-              {...register('scheduleHours', { 
+              type="number"
+              step="0.01"
+              min="0.10"
+              max="168.00"
+              {...register('scheduleHours', {
                 required: 'Schedule is required',
-                pattern: {
-                  value: /^\d+\.\d{2}$/,
-                  message: 'Please use format like 0.10, 0.50, 1.00, 24.00'
+                min: {
+                  value: 0.10,
+                  message: 'Minimum schedule is 0.10 hours (6 minutes)'
                 },
-                validate: {
-                  isNumber: value => !isNaN(value) || 'Must be a valid number',
-                  minValue: value => Number(value) >= 0.1 || 'Minimum is 0.1 hours (6 minutes)',
-                  maxValue: value => Number(value) <= 168 || 'Maximum is 168 hours (1 week)',
-                  format: value => /^\d+\.\d{2}$/.test(value) || 'Must have exactly 2 decimal places'
+                max: {
+                  value: 168.00,
+                  message: 'Maximum schedule is 168.00 hours (7 days)'
                 }
               })}
+              error={errors.scheduleHours?.message}
             />
-            {errors.scheduleHours && <ErrorMessage>{errors.scheduleHours.message}</ErrorMessage>}
             <p style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '0.5rem' }}>
               Enter hours with exactly 2 decimal places (e.g., 0.10 for 6 minutes, 0.50 for 30 minutes, 1.00 for 1 hour, 24.00 for daily)
             </p>
+            {errors.scheduleHours && <ErrorMessage>{errors.scheduleHours.message}</ErrorMessage>}
           </FormGroup>
 
           <FormGroup>
-            <Label htmlFor="numberOfTitles">Number of Titles to Generate</Label>
+            <Label>Number of Titles to Generate</Label>
             <Input
-              id="numberOfTitles"
               type="number"
               min="1"
               max="20"
-              placeholder="e.g., 5, 10, 15"
-              {...register('numberOfTitles', { 
+              {...register('numberOfTitles', {
                 required: 'Number of titles is required',
-                min: { value: 1, message: 'Minimum is 1 title' },
-                max: { value: 20, message: 'Maximum is 20 titles' }
+                min: {
+                  value: 1,
+                  message: 'Minimum is 1 title'
+                },
+                max: {
+                  value: 20,
+                  message: 'Maximum is 20 titles'
+                }
               })}
+              error={errors.numberOfTitles?.message}
             />
-            {errors.numberOfTitles && <ErrorMessage>{errors.numberOfTitles.message}</ErrorMessage>}
             <p style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '0.5rem' }}>
               AI will generate this many titles for you to review and approve
             </p>
+            {errors.numberOfTitles && <ErrorMessage>{errors.numberOfTitles.message}</ErrorMessage>}
           </FormGroup>
         </FormRow>
 
-        <FormRow>
-          <FormGroup>
-            <Label htmlFor="wordpress_site_id">WordPress Site *</Label>
-            <Select 
-              id="wordpress_site_id" 
-              {...register('wordpress_site_id', { required: 'WordPress site is required' })}
-            >
-              <option value="">Select a WordPress site</option>
-              {wordpressSites.map(site => (
-                <option key={site.id} value={site.id}>
-                  {site.siteName} ({site.siteUrl})
-                </option>
-              ))}
-            </Select>
-            {errors.wordpress_site_id && <ErrorMessage>{errors.wordpress_site_id.message}</ErrorMessage>}
-          </FormGroup>
-        </FormRow>
+        <FormGroup>
+          <Label>WordPress Site *</Label>
+          <Select {...register('wordpress_site_id')}>
+            <option value="">Select a WordPress Site</option>
+            {wordpressSites.map(site => (
+              <option key={site.id} value={site.id}>
+                {site.site_name} ({site.site_url})
+              </option>
+            ))}
+          </Select>
+        </FormGroup>
 
         <ContentTypeSelector
           selectedTypes={selectedContentTypes}
@@ -378,7 +384,12 @@ const CreateCampaign = () => {
           <ImperfectionList>
             {imperfectionList.map((imperfection, index) => (
               <ImperfectionItem key={index}>
-                <span>{imperfection}</span>
+                <Input
+                  type="text"
+                  value={imperfection}
+                  onChange={(e) => updateImperfection(index, e.target.value)}
+                  placeholder="e.g., grammar errors, typos, repetitive phrases"
+                />
                 <Button
                   type="button"
                   size="small"
@@ -435,4 +446,3 @@ const CreateCampaign = () => {
 };
 
 export default CreateCampaign;
-
