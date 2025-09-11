@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import { Key, CheckCircle, AlertCircle, Star, Crown, Check } from 'lucide-react';
+import { Key, Star, Crown, Check } from 'lucide-react';
 import { Card, Button, Badge } from '../../styles/GlobalStyles';
 import { useAuth } from '../../contexts/AuthContext';
 

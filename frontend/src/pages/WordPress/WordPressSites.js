@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { Plus, Globe, Settings, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { Card, Button, Badge, Input, Label, FormGroup } from '../../styles/GlobalStyles';
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom';
 import { wordpressAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
@@ -210,7 +210,7 @@ const WordPressSites = () => {
     setLoading(true);
 
     try {
-      const response = await wordpressAPI.addSite(formData);
+      await wordpressAPI.addSite(formData);
       toast.success('WordPress site added successfully!');
       setShowModal(false);
       setFormData({ siteName: '', siteUrl: '', username: '', password: '' });

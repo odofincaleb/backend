@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { Plus, Target, Play, Pause, Settings, Trash2, Edit, Calendar, Globe, FileText } from 'lucide-react';
+import { Plus, Target, Play, Pause, Trash2, Edit, Calendar, Globe, FileText } from 'lucide-react';
 import { Card, Button, Badge } from '../../styles/GlobalStyles';
 import { Link, useNavigate } from 'react-router-dom';
 import { campaignsAPI } from '../../services/api';
@@ -133,7 +133,7 @@ const Campaigns = () => {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState({});
-  const { user } = useAuth();
+  const { } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {

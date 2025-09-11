@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { ArrowLeft, Plus, Trash2, Check, X, Loader, RefreshCw } from 'lucide-react';
-import { Button, Input, Label, FormGroup, ErrorMessage } from '../../styles/GlobalStyles';
+import { Button, Input, Label, FormGroup } from '../../styles/GlobalStyles';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -184,21 +184,14 @@ const EmptyDescription = styled.p`
 
 const TitleQueue = () => {
   const { campaignId } = useParams();
-  const navigate = useNavigate();
-  const { token } = useAuth();
+  // const navigate = useNavigate();
+  // const { token } = useAuth();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [campaign, setCampaign] = useState(null);
   const [titles, setTitles] = useState([]);
   const [newTitle, setNewTitle] = useState('');
   const [addingTitle, setAddingTitle] = useState(false);
-
-  useEffect(() => {
-    if (campaignId) {
-      fetchCampaign();
-      fetchTitles();
-    }
-  }, [campaignId]);
 
   const fetchCampaign = async () => {
     try {
@@ -243,7 +236,7 @@ const TitleQueue = () => {
 
     try {
       setAddingTitle(true);
-      const response = await api.post(`/title-queue/${campaignId}`, {
+      await api.post(`/title-queue/${campaignId}`, {
           title: newTitle.trim()
       });
       
@@ -260,7 +253,7 @@ const TitleQueue = () => {
 
   const updateTitleStatus = async (titleId, status) => {
     try {
-      const response = await api.put(`/title-queue/${titleId}/status`, { status });
+      await api.put(`/title-queue/${titleId}/status`, { status });
         toast.success(`Title ${status} successfully`);
         fetchTitles(); // Refresh the list
     } catch (error) {
@@ -281,6 +274,13 @@ const TitleQueue = () => {
       toast.error('Failed to delete title');
     }
   };
+
+  useEffect(() => {
+    if (campaignId) {
+      fetchCampaign();
+      fetchTitles();
+    }
+  }, [campaignId, fetchCampaign, fetchTitles]);
 
   if (loading) {
     return (

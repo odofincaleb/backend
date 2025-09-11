@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { Eye, EyeOff, Mail, Lock, User, Loader } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button, Input, FormGroup, Label, ErrorMessage } from '../../styles/GlobalStyles';
-import toast from 'react-hot-toast';
+// import toast from 'react-hot-toast';
 
 const RegisterContainer = styled.div`
   min-height: 100vh;

@@ -6,8 +6,8 @@ import {
   FileText, 
   TrendingUp, 
   Clock, 
-  CheckCircle,
-  AlertCircle,
+  // CheckCircle,
+  // AlertCircle,
   Plus
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -198,23 +198,7 @@ const Dashboard = () => {
     postsPublished: 0,
     postsThisMonth: 0,
   });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchDashboardStats();
-  }, []);
-
-  // Refresh stats when component becomes visible
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        fetchDashboardStats();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+  const [loading] = useState(true);
 
   const fetchDashboardStats = async () => {
     try {
@@ -245,6 +229,22 @@ const Dashboard = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchDashboardStats();
+  }, [fetchDashboardStats]);
+
+  // Refresh stats when component becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchDashboardStats();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [fetchDashboardStats]);
 
   const [recentActivity, setRecentActivity] = useState([]);
 

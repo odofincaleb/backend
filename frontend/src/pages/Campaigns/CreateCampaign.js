@@ -88,7 +88,7 @@ const CreateCampaign = () => {
   const [contentTypes, setContentTypes] = useState({});
   const [selectedContentTypes, setSelectedContentTypes] = useState([]);
   const [contentTypeVariables, setContentTypeVariables] = useState({});
-  const [loadingContentTypes, setLoadingContentTypes] = useState(true);
+  const [loadingContentTypes] = useState(true);
 
   const {
     register,

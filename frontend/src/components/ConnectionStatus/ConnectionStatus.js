@@ -63,7 +63,7 @@ const ConnectionStatus = () => {
     } catch (error) {
       console.error('Connection check failed:', error);
       
-      const timeSinceLastConnected = Date.now() - lastConnected;
+      // const timeSinceLastConnected = Date.now() - lastConnected;
       
       if (status === 'connected') {
         // Just disconnected

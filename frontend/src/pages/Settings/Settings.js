@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { User, Key, Bell, Shield, Eye, EyeOff, Save, Loader, CheckCircle, XCircle } from 'lucide-react';
-import { Card, Button, Input, Label, FormGroup, ErrorMessage } from '../../styles/GlobalStyles';
-import { usersAPI } from '../../services/api';
+import { Card, Button, Input, Label, FormGroup } from '../../styles/GlobalStyles';
+// import { usersAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -126,7 +126,7 @@ const StatusIcon = styled.div`
 `;
 
 const Settings = () => {
-  const { user, updateUser } = useAuth();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [loading, setLoading] = useState(false);
   const [apiKeys, setApiKeys] = useState({

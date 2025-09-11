@@ -7,8 +7,8 @@ import {
   Globe, 
   Settings, 
   Key,
-  Menu,
-  X,
+  // Menu,
+  // X,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
