@@ -183,13 +183,17 @@ const CreateCampaign = () => {
     try {
       setLoading(true);
       
+      // Format schedule with 'h' suffix and ensure 2 decimal places
+      const scheduleHours = Number(data.scheduleHours).toFixed(2);
+      
       // Map form data to API format
       const campaignData = {
         topic: data.topic,
         context: data.context,
         toneOfVoice: data.tone_of_voice,
         writingStyle: data.writing_style,
-        scheduleHours: parseFloat(data.scheduleHours),
+        scheduleHours: parseFloat(scheduleHours),
+        schedule: `${scheduleHours}h`,
         numberOfTitles: parseInt(data.numberOfTitles),
         wordpressSiteId: data.wordpress_site_id || null,
         imperfectionList: imperfectionList,
