@@ -7,6 +7,13 @@ const CHECK_INTERVAL = 5000; // Check every 5 seconds
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
+// Create a separate axios instance for health checks
+const healthCheck = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'https://backend-production-8c02.up.railway.app/api',
+  timeout: 3000,
+  validateStatus: (status) => status === 200 // Only accept 200 OK
+});
+
 export const checkConnection = async () => {
   const now = Date.now();
   if (now - lastCheckTime < CHECK_INTERVAL && isOnline) {
@@ -24,27 +31,26 @@ export const checkConnection = async () => {
     // Try up to MAX_RETRIES times with exponential backoff
     for (let i = 0; i < MAX_RETRIES; i++) {
       try {
-        await axios.get(
-          process.env.REACT_APP_API_URL || 'https://backend-production-8c02.up.railway.app/api' + '/health',
-          { 
-            timeout: 3000,
-            validateStatus: (status) => status === 200 // Only accept 200 OK
-          }
-        );
+        await healthCheck.get('/health');
         isOnline = true;
         break; // Success, exit retry loop
       } catch (error) {
+        console.log(`Health check attempt ${i + 1} failed:`, error.message);
+        
         if (i === MAX_RETRIES - 1) {
           // Last attempt failed
           isOnline = false;
           throw error;
         }
+        
         // Wait with exponential backoff before retrying
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, i)));
+        const delay = RETRY_DELAY * Math.pow(2, i);
+        console.log(`Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   } catch (error) {
-    console.error('Connection check failed:', error.message);
+    console.error('Connection check failed after retries:', error.message);
     isOnline = false;
   } finally {
     lastCheckTime = now;
