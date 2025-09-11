@@ -9,17 +9,22 @@ const http = require('http');
 
 const logger = require('./utils/logger');
 
-// Import routes
-const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/users');
-const campaignRoutes = require('./routes/campaigns');
-const wordpressRoutes = require('./routes/wordpress');
-const licenseRoutes = require('./routes/license');
-const adminRoutes = require('./routes/admin');
-const titleQueueRoutes = require('./routes/titleQueue');
+// Import routes (commented out temporarily to test health check)
+// const authRoutes = require('./routes/auth');
+// const userRoutes = require('./routes/users');
+// const campaignRoutes = require('./routes/campaigns');
+// const wordpressRoutes = require('./routes/wordpress');
+// const licenseRoutes = require('./routes/license');
+// const adminRoutes = require('./routes/admin');
+// const titleQueueRoutes = require('./routes/titleQueue');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Basic health check (before any middleware)
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', port: PORT });
+});
 
 // Trust proxy for Railway deployment
 app.set('trust proxy', 1);
@@ -87,33 +92,16 @@ if (process.env.NODE_ENV !== 'test') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint (before all other routes)
-app.get('/health', (req, res) => {
-  try {
-    res.status(200).json({
-      status: 'OK',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: process.env.NODE_ENV || 'development',
-      port: PORT
-    });
-  } catch (error) {
-    logger.error('Health check error:', error);
-    res.status(500).json({
-      status: 'ERROR',
-      error: error.message
-    });
-  }
-});
+// Health check endpoint is already defined above
 
-// API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/campaigns', campaignRoutes);
-app.use('/api/wordpress', wordpressRoutes);
-app.use('/api/license', licenseRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/title-queue', titleQueueRoutes);
+// API routes (commented out temporarily to test health check)
+// app.use('/api/auth', authRoutes);
+// app.use('/api/users', userRoutes);
+// app.use('/api/campaigns', campaignRoutes);
+// app.use('/api/wordpress', wordpressRoutes);
+// app.use('/api/license', licenseRoutes);
+// app.use('/api/admin', adminRoutes);
+// app.use('/api/title-queue', titleQueueRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
@@ -222,9 +210,13 @@ const startServer = () => {
   }
 };
 
-// Start the server with a small delay to ensure everything is ready
-setTimeout(() => {
+// Start the server
+try {
   const serverInstance = startServer();
-}, 1000);
+  logger.info('Server startup initiated');
+} catch (error) {
+  logger.error('Failed to start server:', error);
+  process.exit(1);
+}
 
 module.exports = app;
