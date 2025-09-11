@@ -89,12 +89,21 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint (before all other routes)
 app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development'
-  });
+  try {
+    res.status(200).json({
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || 'development',
+      port: PORT
+    });
+  } catch (error) {
+    logger.error('Health check error:', error);
+    res.status(500).json({
+      status: 'ERROR',
+      error: error.message
+    });
+  }
 });
 
 // API routes
@@ -171,10 +180,10 @@ server.on('connection', (socket) => {
 // Start server
 const startServer = () => {
   try {
-    server.listen(PORT, () => {
+    server.listen(PORT, '0.0.0.0', () => {
       logger.info(`🚀 Fiddy AutoPublisher API server running on port ${PORT}`);
       logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
+      logger.info(`🔗 Health check: http://0.0.0.0:${PORT}/health`);
     });
 
     // Handle graceful shutdown
@@ -213,7 +222,9 @@ const startServer = () => {
   }
 };
 
-// Start the server
-const serverInstance = startServer();
+// Start the server with a small delay to ensure everything is ready
+setTimeout(() => {
+  const serverInstance = startServer();
+}, 1000);
 
 module.exports = app;
