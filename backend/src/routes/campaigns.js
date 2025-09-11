@@ -71,7 +71,10 @@ const createCampaignSchema = Joi.object({
   return value;
 }, 'Campaign validation').messages({
   'custom.scheduleRequired': 'Either schedule or scheduleHours must be provided',
-  'custom.contentTypesInvalid': 'Content types validation failed: {#message}'
+  'string.schedule': 'Invalid schedule format or value. Must be a number between 0.10 and 168.00 with optional "h" suffix.',
+  'number.min': 'Schedule hours must be at least {{limit}}',
+  'number.max': 'Schedule hours cannot exceed {{limit}}',
+  'custom.contentTypesInvalid': '{{#message}}'
 });
 
 const updateCampaignSchema = Joi.object({
@@ -131,184 +134,80 @@ const updateCampaignSchema = Joi.object({
   }
   return value;
 }, 'Campaign validation').messages({
-  'custom.contentTypesInvalid': 'Content types validation failed: {#message}'
+  'string.schedule': 'Invalid schedule format or value. Must be a number between 0.10 and 168.00 with optional "h" suffix.',
+  'number.min': 'Schedule hours must be at least {{limit}}',
+  'number.max': 'Schedule hours cannot exceed {{limit}}',
+  'custom.contentTypesInvalid': '{{#message}}'
 });
 
-/**
- * GET /api/campaigns/content-types
- * Get all available content types
- */
-router.get('/content-types', authenticateToken, async (req, res) => {
-  try {
-    const contentTypes = contentTypeTemplates.getAllContentTypes();
-    res.json({
-      contentTypes
-    });
-  } catch (error) {
-    logger.error('Get content types error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to get content types'
-    });
-  }
-});
-
-/**
- * GET /api/campaigns
- * Get all campaigns for the user
- */
+// Get all campaigns for the authenticated user
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
-
-    let result;
-    try {
-      // Try with all new columns first (after migration)
-      result = await query(
-        `SELECT c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
-                c.imperfection_list, c.schedule, c.schedule_hours, c.status, c.next_publish_at,
-                c.created_at, c.updated_at, c.content_types, c.content_type_variables,
-                ws.site_name, ws.site_url,
-                COUNT(cq.id) as posts_published,
-                COUNT(tq.id) as titles_in_queue,
-                COUNT(CASE WHEN tq.status = 'approved' THEN 1 END) as approved_titles
-         FROM campaigns c
-         LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
-         LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
-         LEFT JOIN title_queue tq ON c.id = tq.campaign_id
-         WHERE c.user_id = $1
-         GROUP BY c.id, ws.site_name, ws.site_url
-         ORDER BY c.created_at DESC`,
-        [userId]
-      );
-    } catch (error) {
-      // Fallback to legacy format if new columns don't exist yet
-      if (error.message.includes('schedule_hours') || error.message.includes('content_types') || error.message.includes('title_queue')) {
-        result = await query(
-      `SELECT c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
-              c.imperfection_list, c.schedule, c.status, c.next_publish_at,
-              c.created_at, c.updated_at,
-              ws.site_name, ws.site_url,
-              COUNT(cq.id) as posts_published,
-              0 as titles_in_queue,
-              0 as approved_titles
-       FROM campaigns c
-       LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
-       LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
-       WHERE c.user_id = $1
-       GROUP BY c.id, ws.site_name, ws.site_url
-       ORDER BY c.created_at DESC`,
+    const result = await query(
+      `SELECT c.*, 
+        w.site_name as wordpress_site_name,
+        w.site_url as wordpress_site_url
+      FROM campaigns c
+      LEFT JOIN wordpress_sites w ON c.wordpress_site_id = w.id
+      WHERE c.user_id = $1
+      ORDER BY c.created_at DESC`,
       [userId]
     );
-      } else {
-        throw error;
-      }
-    }
-
-    const campaigns = result.rows.map(campaign => ({
-      id: campaign.id,
-      topic: campaign.topic,
-      context: campaign.context,
-      toneOfVoice: campaign.tone_of_voice,
-      writingStyle: campaign.writing_style,
-      imperfectionList: campaign.imperfection_list,
-      schedule: campaign.schedule,
-      scheduleHours: campaign.schedule_hours || (campaign.schedule ? parseInt(campaign.schedule.replace('h', '')) : 24),
-      numberOfTitles: campaign.number_of_titles || 5,
-      status: campaign.status,
-      nextPublishAt: campaign.next_publish_at,
-      wordpressSite: campaign.site_name ? {
-        name: campaign.site_name,
-        url: campaign.site_url
-      } : null,
-      postsPublished: parseInt(campaign.posts_published),
-      titlesInQueue: parseInt(campaign.titles_in_queue),
-      approvedTitles: parseInt(campaign.approved_titles),
-      contentTypes: campaign.content_types || Object.keys(contentTypeTemplates.getAllContentTypes()),
-      contentTypeVariables: campaign.content_type_variables || {},
-      createdAt: campaign.created_at,
-      updatedAt: campaign.updated_at
-    }));
 
     res.json({
-      campaigns
+      success: true,
+      campaigns: result.rows
     });
-
   } catch (error) {
-    logger.error('Get campaigns error:', error);
+    logger.error('Error getting campaigns:', error);
     res.status(500).json({
-      error: 'Internal server error',
+      error: 'Database error',
       message: 'Failed to get campaigns'
     });
   }
 });
 
-/**
- * GET /api/campaigns/:id
- * Get a specific campaign
- */
+// Get a specific campaign by ID
 router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const campaignId = req.params.id;
 
     const result = await query(
-      `SELECT c.*, ws.site_name, ws.site_url
-       FROM campaigns c
-       LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
-       WHERE c.id = $1 AND c.user_id = $2`,
+      `SELECT c.*, 
+        w.site_name as wordpress_site_name,
+        w.site_url as wordpress_site_url
+      FROM campaigns c
+      LEFT JOIN wordpress_sites w ON c.wordpress_site_id = w.id
+      WHERE c.id = $1 AND c.user_id = $2`,
       [campaignId, userId]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({
-        error: 'Campaign not found'
+        error: 'Not found',
+        message: 'Campaign not found'
       });
     }
 
-    const campaign = result.rows[0];
-
     res.json({
-      campaign: {
-        id: campaign.id,
-        topic: campaign.topic,
-        context: campaign.context,
-        toneOfVoice: campaign.tone_of_voice,
-        writingStyle: campaign.writing_style,
-        imperfectionList: campaign.imperfection_list,
-        schedule: campaign.schedule,
-        scheduleHours: campaign.schedule_hours || (campaign.schedule ? parseInt(campaign.schedule.replace('h', '')) : 24),
-        numberOfTitles: campaign.number_of_titles || 5,
-        status: campaign.status,
-        nextPublishAt: campaign.next_publish_at,
-        contentTypes: campaign.content_types || Object.keys(contentTypeTemplates.getAllContentTypes()),
-        contentTypeVariables: campaign.content_type_variables || {},
-        wordpressSite: campaign.site_name ? {
-          id: campaign.wordpress_site_id,
-          name: campaign.site_name,
-          url: campaign.site_url
-        } : null,
-        createdAt: campaign.created_at,
-        updatedAt: campaign.updated_at
-      }
+      success: true,
+      campaign: result.rows[0]
     });
-
   } catch (error) {
-    logger.error('Get campaign error:', error);
+    logger.error('Error getting campaign:', error);
     res.status(500).json({
-      error: 'Internal server error',
+      error: 'Database error',
       message: 'Failed to get campaign'
     });
   }
 });
 
-/**
- * POST /api/campaigns
- * Create a new campaign
- */
+// Create a new campaign
 router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
   try {
-    logger.info('Creating campaign with data:', req.body);
+    logger.info('Creating new campaign with data:', req.body);
     
     // Validate input
     const { error, value } = createCampaignSchema.validate(req.body);
@@ -353,18 +252,10 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
       }
     }
 
-    // Calculate next publish time and determine schedule values
+    // Process schedule values
     let finalScheduleHours;
     let finalSchedule;
     
-    logger.info('Processing schedule input:', { 
-      scheduleHours, 
-      schedule,
-      scheduleType: typeof scheduleHours,
-      isNumber: !isNaN(scheduleHours)
-    });
-    
-    // Process schedule values
     try {
       // Get hours from either scheduleHours or schedule
       let hours;
@@ -417,152 +308,79 @@ router.post('/', authenticateToken, checkCampaignLimit, async (req, res) => {
     let finalContentTypeVariables = contentTypeVariables || {};
     
     const nextPublishAt = new Date(Date.now() + finalScheduleHours * 60 * 60 * 1000);
-    logger.info('Calculated next publish time:', { finalScheduleHours, nextPublishAt });
+    logger.info('Calculated next publish time:', nextPublishAt);
 
-    // Create campaign
-    let result;
+    // Start a transaction
+    const client = await query.getClient();
     try {
-      logger.info('Attempting to insert campaign with new columns');
-      logger.info('Insert values:', {
-        userId, topic, context, toneOfVoice, writingStyle,
-        imperfectionList: JSON.stringify(imperfectionList), 
-        finalSchedule, finalScheduleHours, numberOfTitles, wordpressSiteId, nextPublishAt,
-        finalContentTypes: JSON.stringify(finalContentTypes), 
-        finalContentTypeVariables: JSON.stringify(finalContentTypeVariables)
-      });
-      
-      // Try with all new columns first (after migration)
-      result = await query(
+      await client.query('BEGIN');
+
+      // Insert the campaign
+      const campaignResult = await client.query(
         `INSERT INTO campaigns (
-          user_id, topic, context, tone_of_voice, writing_style, 
-          imperfection_list, schedule, schedule_hours, number_of_titles, wordpress_site_id, next_publish_at,
-          content_types, content_type_variables
+          user_id, wordpress_site_id, topic, context, tone_of_voice, writing_style,
+          imperfection_list, schedule, schedule_hours, number_of_titles,
+          content_types, content_type_variables, next_publish_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-        RETURNING id, topic, context, tone_of_voice, writing_style, 
-                  imperfection_list, schedule, schedule_hours, number_of_titles, status, next_publish_at, created_at,
-                  content_types, content_type_variables`,
+        RETURNING *`,
         [
-          userId, topic, context, toneOfVoice, writingStyle,
-          JSON.stringify(imperfectionList), finalSchedule, finalScheduleHours, numberOfTitles, wordpressSiteId, nextPublishAt,
-          JSON.stringify(finalContentTypes), JSON.stringify(finalContentTypeVariables)
+          userId,
+          wordpressSiteId || null,
+          topic,
+          context,
+          toneOfVoice,
+          writingStyle,
+          JSON.stringify(imperfectionList),
+          finalSchedule,
+          finalScheduleHours,
+          numberOfTitles,
+          JSON.stringify(finalContentTypes),
+          JSON.stringify(finalContentTypeVariables),
+          nextPublishAt
         ]
       );
-      logger.info('Campaign inserted successfully with new columns');
+
+      // Create initial title queue entries
+      const campaign = campaignResult.rows[0];
+      const titleQueueValues = Array(numberOfTitles).fill(null).map(() => (
+        `('${campaign.id}', 'pending', NOW(), NOW())`
+      )).join(',');
+
+      await client.query(`
+        INSERT INTO title_queue (campaign_id, status, created_at, updated_at)
+        VALUES ${titleQueueValues}
+      `);
+
+      await client.query('COMMIT');
+
+      logger.info('Campaign created successfully:', campaign);
+
+      res.status(201).json({
+        success: true,
+        campaign
+      });
     } catch (error) {
-      logger.error('Failed to insert with new columns:', error);
-      logger.error('Error details:', error.message);
-      // Fallback to legacy format if new columns don't exist yet
-      if (error.message.includes('schedule_hours') || error.message.includes('content_types') || error.message.includes('title_queue')) {
-        result = await query(
-      `INSERT INTO campaigns (
-        user_id, topic, context, tone_of_voice, writing_style, 
-        imperfection_list, schedule, wordpress_site_id, next_publish_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING id, topic, context, tone_of_voice, writing_style, 
-                imperfection_list, schedule, status, next_publish_at, created_at`,
-      [
-        userId, topic, context, toneOfVoice, writingStyle,
-            JSON.stringify(imperfectionList), finalSchedule, wordpressSiteId, nextPublishAt
-      ]
-    );
-      } else {
-        throw error;
-      }
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-
-    const campaign = result.rows[0];
-
-    // Automatically generate titles for the new campaign
-    try {
-      const ContentGenerator = require('../services/contentGenerator');
-      const contentGenerator = new ContentGenerator();
-      
-      // Check if OpenAI API key is configured
-      if (process.env.OPENAI_API_KEY) {
-        logger.info(`Auto-generating ${numberOfTitles} titles for new campaign: ${campaign.id}`);
-        
-        const generatedTitles = await contentGenerator.generateTitles(campaign, numberOfTitles);
-        logger.info(`Generated ${generatedTitles ? generatedTitles.length : 0} titles:`, generatedTitles);
-        
-        if (generatedTitles && generatedTitles.length > 0) {
-          // Check if title_queue table exists before inserting
-          try {
-            // Insert generated titles into title_queue
-            for (const title of generatedTitles) {
-              const keywords = title.toLowerCase()
-                .replace(/[^\w\s]/g, '')
-                .split(/\s+/)
-                .filter(word => word.length > 3)
-                .slice(0, 5);
-              
-              await query(
-                `INSERT INTO title_queue (campaign_id, title, status, keywords)
-                 VALUES ($1, $2, 'pending', $3)`,
-                [campaign.id, title, JSON.stringify(keywords)]
-              );
-            }
-            
-            logger.info(`Successfully inserted ${generatedTitles.length} titles into title_queue for campaign: ${campaign.id}`);
-          } catch (tableError) {
-            logger.warn('title_queue table might not exist yet, skipping title insertion:', tableError.message);
-            logger.warn('Titles were generated but not saved:', generatedTitles);
-            // Continue without failing campaign creation
-          }
-        } else {
-          logger.warn('No titles were generated by ContentGenerator');
-        }
-      } else {
-        logger.warn('OpenAI API key not configured, skipping auto-title generation');
-      }
-    } catch (titleError) {
-      logger.error('Auto-title generation failed:', titleError);
-      logger.error('Title generation error details:', titleError.message);
-      // Don't fail campaign creation if title generation fails
-    }
-
-    // Log campaign creation
-    await query(
-      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity, metadata)
-       VALUES ($1, $2, 'campaign_created', 'New campaign created', 'info', $3)`,
-      [userId, campaign.id, JSON.stringify({ topic, schedule, numberOfTitles })]
-    );
-
-    logger.info('Campaign created:', { userId, campaignId: campaign.id, topic, numberOfTitles });
-
-    res.status(201).json({
-      message: 'Campaign created successfully',
-      campaign: {
-        id: campaign.id,
-        topic: campaign.topic,
-        context: campaign.context,
-        toneOfVoice: campaign.tone_of_voice,
-        writingStyle: campaign.writing_style,
-        imperfectionList: campaign.imperfection_list,
-        schedule: campaign.schedule,
-        status: campaign.status,
-        nextPublishAt: campaign.next_publish_at,
-        createdAt: campaign.created_at
-      }
-    });
-
   } catch (error) {
-    logger.error('Create campaign error:', error);
-    logger.error('Error stack:', error.stack);
+    logger.error('Error creating campaign:', error);
     res.status(500).json({
-      error: 'Internal server error',
+      error: 'Database error',
       message: 'Failed to create campaign',
-      details: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      details: error.message
     });
   }
 });
 
-/**
- * PUT /api/campaigns/:id
- * Update a campaign
- */
+// Update a campaign
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
+    const userId = req.user.id;
+    const campaignId = req.params.id;
+
     // Validate input
     const { error, value } = updateCampaignSchema.validate(req.body);
     if (error) {
@@ -572,382 +390,178 @@ router.put('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    const userId = req.user.id;
-    const campaignId = req.params.id;
+    const {
+      topic,
+      context,
+      toneOfVoice,
+      writingStyle,
+      imperfectionList,
+      schedule,
+      scheduleHours,
+      numberOfTitles,
+      wordpressSiteId,
+      status,
+      contentTypes,
+      contentTypeVariables
+    } = value;
 
-    // Check if campaign exists and belongs to user
-    const existingCampaign = await query(
-      'SELECT id FROM campaigns WHERE id = $1 AND user_id = $2',
-      [campaignId, userId]
-    );
-
-    if (existingCampaign.rows.length === 0) {
-      return res.status(404).json({
-        error: 'Campaign not found'
-      });
-    }
-
-    // Build update query
+    // Build update query dynamically
     const updates = [];
-    const values = [];
-    let paramCount = 1;
+    const values = [campaignId, userId];
+    let paramCount = 3;
 
-    if (value.topic) {
+    if (topic !== undefined) {
       updates.push(`topic = $${paramCount++}`);
-      values.push(value.topic);
+      values.push(topic);
     }
-    if (value.context) {
+    if (context !== undefined) {
       updates.push(`context = $${paramCount++}`);
-      values.push(value.context);
+      values.push(context);
     }
-    if (value.toneOfVoice) {
+    if (toneOfVoice !== undefined) {
       updates.push(`tone_of_voice = $${paramCount++}`);
-      values.push(value.toneOfVoice);
+      values.push(toneOfVoice);
     }
-    if (value.writingStyle) {
+    if (writingStyle !== undefined) {
       updates.push(`writing_style = $${paramCount++}`);
-      values.push(value.writingStyle);
+      values.push(writingStyle);
     }
-    if (value.imperfectionList) {
+    if (imperfectionList !== undefined) {
       updates.push(`imperfection_list = $${paramCount++}`);
-      values.push(JSON.stringify(value.imperfectionList));
+      values.push(JSON.stringify(imperfectionList));
     }
-    if (value.schedule) {
+    if (schedule !== undefined) {
       updates.push(`schedule = $${paramCount++}`);
-      values.push(value.schedule);
+      values.push(schedule);
     }
-    if (value.scheduleHours !== undefined) {
+    if (scheduleHours !== undefined) {
       updates.push(`schedule_hours = $${paramCount++}`);
-      values.push(value.scheduleHours);
+      values.push(scheduleHours);
     }
-    if (value.numberOfTitles !== undefined) {
+    if (numberOfTitles !== undefined) {
       updates.push(`number_of_titles = $${paramCount++}`);
-      values.push(value.numberOfTitles);
+      values.push(numberOfTitles);
     }
-    if (value.wordpressSiteId) {
-      // Validate WordPress site
-      const siteResult = await query(
-        'SELECT id FROM wordpress_sites WHERE id = $1 AND user_id = $2',
-        [value.wordpressSiteId, userId]
-      );
-      if (siteResult.rows.length === 0) {
-        return res.status(404).json({
-          error: 'WordPress site not found'
-        });
-      }
+    if (wordpressSiteId !== undefined) {
       updates.push(`wordpress_site_id = $${paramCount++}`);
-      values.push(value.wordpressSiteId);
+      values.push(wordpressSiteId || null);
     }
-    if (value.status) {
+    if (status !== undefined) {
       updates.push(`status = $${paramCount++}`);
-      values.push(value.status);
+      values.push(status);
     }
-    if (value.contentTypes) {
+    if (contentTypes !== undefined) {
       updates.push(`content_types = $${paramCount++}`);
-      values.push(JSON.stringify(value.contentTypes));
+      values.push(JSON.stringify(contentTypes));
     }
-    if (value.contentTypeVariables) {
+    if (contentTypeVariables !== undefined) {
       updates.push(`content_type_variables = $${paramCount++}`);
-      values.push(JSON.stringify(value.contentTypeVariables));
+      values.push(JSON.stringify(contentTypeVariables));
     }
+
+    updates.push(`updated_at = NOW()`);
 
     if (updates.length === 0) {
       return res.status(400).json({
-        error: 'No updates provided'
+        error: 'Validation error',
+        message: 'No fields to update'
       });
     }
 
-    updates.push(`updated_at = CURRENT_TIMESTAMP`);
-    values.push(campaignId);
-
-    const updateQuery = `
-      UPDATE campaigns 
-      SET ${updates.join(', ')} 
-      WHERE id = $${paramCount}
-      RETURNING *
-    `;
-
-    const result = await query(updateQuery, values);
-    const campaign = result.rows[0];
-
-    // Log campaign update
-    await query(
-      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity, metadata)
-       VALUES ($1, $2, 'campaign_updated', 'Campaign updated', 'info', $3)`,
-      [userId, campaignId, JSON.stringify(Object.keys(value))]
+    const result = await query(
+      `UPDATE campaigns 
+      SET ${updates.join(', ')}
+      WHERE id = $1 AND user_id = $2
+      RETURNING *`,
+      values
     );
 
-    logger.info('Campaign updated:', { userId, campaignId, updates: Object.keys(value) });
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Not found',
+        message: 'Campaign not found'
+      });
+    }
 
     res.json({
-      message: 'Campaign updated successfully',
-      campaign: {
-        id: campaign.id,
-        topic: campaign.topic,
-        context: campaign.context,
-        toneOfVoice: campaign.tone_of_voice,
-        writingStyle: campaign.writing_style,
-        imperfectionList: campaign.imperfection_list,
-        schedule: campaign.schedule,
-        status: campaign.status,
-        nextPublishAt: campaign.next_publish_at,
-        updatedAt: campaign.updated_at
-      }
+      success: true,
+      campaign: result.rows[0]
     });
-
   } catch (error) {
-    logger.error('Update campaign error:', error);
+    logger.error('Error updating campaign:', error);
     res.status(500).json({
-      error: 'Internal server error',
+      error: 'Database error',
       message: 'Failed to update campaign'
     });
   }
 });
 
-/**
- * DELETE /api/campaigns/:id
- * Delete a campaign
- */
+// Delete a campaign
 router.delete('/:id', authenticateToken, async (req, res) => {
+  const client = await query.getClient();
   try {
+    await client.query('BEGIN');
+
     const userId = req.user.id;
     const campaignId = req.params.id;
 
-    // Check if campaign exists and belongs to user
-    const existingCampaign = await query(
-      'SELECT id FROM campaigns WHERE id = $1 AND user_id = $2',
+    // Log the deletion attempt
+    logger.info(`Attempting to delete campaign ${campaignId} for user ${userId}`);
+
+    // First, update any references to this campaign to NULL
+    await client.query(
+      'UPDATE title_queue SET campaign_id = NULL WHERE campaign_id = $1',
+      [campaignId]
+    );
+
+    // Then delete the campaign
+    const result = await client.query(
+      'DELETE FROM campaigns WHERE id = $1 AND user_id = $2 RETURNING id',
       [campaignId, userId]
     );
 
-    if (existingCampaign.rows.length === 0) {
+    await client.query('COMMIT');
+
+    if (result.rows.length === 0) {
       return res.status(404).json({
-        error: 'Campaign not found'
+        error: 'Not found',
+        message: 'Campaign not found'
       });
     }
 
-    // Log campaign deletion (before deleting the campaign)
-    try {
-      await query(
-        `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
-         VALUES ($1, $2, 'campaign_deleted', 'Campaign deleted', 'info')`,
-        [userId, campaignId]
-      );
-      logger.info('Logged campaign deletion');
-    } catch (error) {
-      logger.warn('Error logging campaign deletion:', error.message);
-    }
-
-    // Delete campaign and related data
-    // Use a transaction to ensure atomicity
-    await query('BEGIN');
-    
-    try {
-      // First, try to delete from title_queue if it exists
-      try {
-        await query('DELETE FROM title_queue WHERE campaign_id = $1', [campaignId]);
-        logger.info('Deleted from title_queue');
-      } catch (error) {
-        // title_queue table might not exist yet, continue with deletion
-        logger.warn('title_queue table might not exist, continuing with campaign deletion:', error.message);
-      }
-      
-      // Try to delete from content_queue with more aggressive approach
-      try {
-        // First, try to set title_queue_id to NULL to avoid foreign key constraint issues
-        await query('UPDATE content_queue SET title_queue_id = NULL WHERE campaign_id = $1', [campaignId]);
-        logger.info('Cleared title_queue_id references');
-        
-        // Now delete from content_queue
-        await query('DELETE FROM content_queue WHERE campaign_id = $1', [campaignId]);
-        logger.info('Deleted from content_queue');
-      } catch (error) {
-        logger.warn('Error deleting from content_queue:', error.message);
-        // Try to continue anyway - maybe content_queue doesn't exist or has issues
-      }
-      
-      // Try to delete from logs table as well
-      try {
-        await query('DELETE FROM logs WHERE campaign_id = $1', [campaignId]);
-        logger.info('Deleted from logs');
-      } catch (error) {
-        logger.warn('Error deleting from logs:', error.message);
-      }
-      
-      // Finally delete the campaign
-      await query('DELETE FROM campaigns WHERE id = $1', [campaignId]);
-      logger.info('Deleted campaign');
-      
-      // Commit the transaction
-      await query('COMMIT');
-      
-    } catch (error) {
-      // Rollback on any error
-      await query('ROLLBACK');
-      logger.error('Error deleting campaign, transaction rolled back:', error);
-      throw error;
-    }
-
-    logger.info('Campaign deleted:', { userId, campaignId });
+    logger.info(`Successfully deleted campaign ${campaignId}`);
 
     res.json({
+      success: true,
       message: 'Campaign deleted successfully'
     });
-
   } catch (error) {
-    logger.error('Delete campaign error:', error);
+    await client.query('ROLLBACK');
+    logger.error('Error deleting campaign:', error);
     res.status(500).json({
-      error: 'Internal server error',
+      error: 'Database error',
       message: 'Failed to delete campaign'
     });
+  } finally {
+    client.release();
   }
 });
 
-/**
- * POST /api/campaigns/:id/start
- * Start a campaign
- */
-router.post('/:id/start', authenticateToken, async (req, res) => {
+// Get available content types
+router.get('/content-types', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const campaignId = req.params.id;
-
-    // Update campaign status to active and set next_publish_at to now for immediate processing
-    const result = await query(
-      `UPDATE campaigns 
-       SET status = 'active', next_publish_at = NOW(), updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $1 AND user_id = $2
-       RETURNING *`,
-      [campaignId, userId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        error: 'Campaign not found'
-      });
-    }
-
-    // Log campaign start
-    await query(
-      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
-       VALUES ($1, $2, 'campaign_started', 'Campaign started and scheduled for immediate processing', 'info')`,
-      [userId, campaignId]
-    );
-
-    logger.info('Campaign started with immediate processing:', { userId, campaignId });
-
+    const contentTypes = contentTypeTemplates.getAllContentTypes();
     res.json({
-      message: 'Campaign started successfully and scheduled for immediate processing'
+      success: true,
+      contentTypes
     });
-
   } catch (error) {
-    logger.error('Start campaign error:', error);
+    logger.error('Error getting content types:', error);
     res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to start campaign'
-    });
-  }
-});
-
-/**
- * POST /api/campaigns/:id/trigger
- * Manually trigger campaign processing
- */
-router.post('/:id/trigger', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const campaignId = req.params.id;
-
-    // Get campaign details
-    const campaignResult = await query(
-      `SELECT c.*, ws.site_name, ws.site_url, ws.username, ws.password_encrypted, ws.api_endpoint
-       FROM campaigns c
-       LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
-       WHERE c.id = $1 AND c.user_id = $2`,
-      [campaignId, userId]
-    );
-
-    if (campaignResult.rows.length === 0) {
-      return res.status(404).json({
-        error: 'Campaign not found'
-      });
-    }
-
-    const campaign = campaignResult.rows[0];
-
-    // Import queue processor
-    const queueProcessor = require('../services/queueProcessor');
-    
-    // Process the campaign immediately
-    await queueProcessor.processCampaign(campaign);
-
-    // Log manual trigger
-    await query(
-      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
-       VALUES ($1, $2, 'manual_trigger', 'Campaign manually triggered for processing', 'info')`,
-      [userId, campaignId]
-    );
-
-    logger.info('Campaign manually triggered:', { userId, campaignId });
-
-    res.json({
-      message: 'Campaign processing triggered successfully'
-    });
-
-  } catch (error) {
-    logger.error('Manual trigger error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to trigger campaign processing',
-      details: error.message
-    });
-  }
-});
-
-/**
- * POST /api/campaigns/:id/stop
- * Stop a campaign
- */
-router.post('/:id/stop', authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const campaignId = req.params.id;
-
-    // Update campaign status to paused
-    const result = await query(
-      `UPDATE campaigns 
-       SET status = 'paused', updated_at = CURRENT_TIMESTAMP 
-       WHERE id = $1 AND user_id = $2
-       RETURNING *`,
-      [campaignId, userId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({
-        error: 'Campaign not found'
-      });
-    }
-
-    // Log campaign stop
-    await query(
-      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
-       VALUES ($1, $2, 'campaign_stopped', 'Campaign stopped', 'info')`,
-      [userId, campaignId]
-    );
-
-    logger.info('Campaign stopped:', { userId, campaignId });
-
-    res.json({
-      message: 'Campaign stopped successfully'
-    });
-
-  } catch (error) {
-    logger.error('Stop campaign error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to stop campaign'
+      error: 'Server error',
+      message: 'Failed to get content types'
     });
   }
 });
 
 module.exports = router;
-
