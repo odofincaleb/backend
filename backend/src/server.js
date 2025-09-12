@@ -9,14 +9,14 @@ const http = require('http');
 
 const logger = require('./utils/logger');
 
-// Import routes
-const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/users');
-const campaignRoutes = require('./routes/campaigns');
-const wordpressRoutes = require('./routes/wordpress');
-const licenseRoutes = require('./routes/license');
-const adminRoutes = require('./routes/admin');
-const titleQueueRoutes = require('./routes/titleQueue');
+// Import routes (temporarily commented out to test startup)
+// const authRoutes = require('./routes/auth');
+// const userRoutes = require('./routes/users');
+// const campaignRoutes = require('./routes/campaigns');
+// const wordpressRoutes = require('./routes/wordpress');
+// const licenseRoutes = require('./routes/license');
+// const adminRoutes = require('./routes/admin');
+// const titleQueueRoutes = require('./routes/titleQueue');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -94,14 +94,14 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint is already defined above
 
-// API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/campaigns', campaignRoutes);
-app.use('/api/wordpress', wordpressRoutes);
-app.use('/api/license', licenseRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/title-queue', titleQueueRoutes);
+// API routes (temporarily commented out to test startup)
+// app.use('/api/auth', authRoutes);
+// app.use('/api/users', userRoutes);
+// app.use('/api/campaigns', campaignRoutes);
+// app.use('/api/wordpress', wordpressRoutes);
+// app.use('/api/license', licenseRoutes);
+// app.use('/api/admin', adminRoutes);
+// app.use('/api/title-queue', titleQueueRoutes);
 
 // Global error handler
 app.use((err, req, res, next) => {
@@ -168,10 +168,21 @@ server.on('connection', (socket) => {
 // Start server
 const startServer = () => {
   try {
+    console.log('Creating HTTP server...');
+    const server = http.createServer(app);
+    
+    console.log('Starting to listen on port:', PORT);
     server.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server successfully listening on port ${PORT}`);
       logger.info(`🚀 Fiddy AutoPublisher API server running on port ${PORT}`);
       logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
       logger.info(`🔗 Health check: http://0.0.0.0:${PORT}/health`);
+    });
+
+    server.on('error', (error) => {
+      console.error('Server error:', error);
+      logger.error('Server error:', error);
+      throw error;
     });
 
     // Handle graceful shutdown
@@ -212,9 +223,15 @@ const startServer = () => {
 
 // Start the server
 try {
+  console.log('Starting server...');
+  console.log('PORT:', PORT);
+  console.log('NODE_ENV:', process.env.NODE_ENV);
+  
   const serverInstance = startServer();
+  console.log('Server startup initiated successfully');
   logger.info('Server startup initiated');
 } catch (error) {
+  console.error('Failed to start server:', error);
   logger.error('Failed to start server:', error);
   process.exit(1);
 }
