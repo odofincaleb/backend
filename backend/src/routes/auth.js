@@ -19,6 +19,41 @@ const registerSchema = Joi.object({
   name: Joi.string().required()
 });
 
+// Test endpoint to test database query specifically
+router.get('/test-db-query', async (req, res) => {
+  try {
+    console.log('Testing database query for test user...');
+    
+    const result = await query(
+      'SELECT * FROM users WHERE email = $1',
+      ['test@example.com']
+    );
+    
+    console.log('Database query result:', result.rows.length, 'users found');
+    if (result.rows.length > 0) {
+      const user = result.rows[0];
+      console.log('User found:', { id: user.id, email: user.email, name: user.name });
+      // Don't log the password hash for security
+    }
+    
+    res.json({
+      success: true,
+      userCount: result.rows.length,
+      user: result.rows.length > 0 ? {
+        id: result.rows[0].id,
+        email: result.rows[0].email,
+        name: result.rows[0].name
+      } : null
+    });
+  } catch (error) {
+    console.error('Database query error:', error);
+    res.status(500).json({
+      error: 'Database query failed',
+      message: error.message
+    });
+  }
+});
+
 // Test endpoint to check environment and database
 router.get('/health-check', async (req, res) => {
   try {
