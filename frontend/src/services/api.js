@@ -66,8 +66,8 @@ api.interceptors.response.use(
           break;
         case 401:
           toast.error('Unauthorized. Please log in again.');
-          localStorage.removeItem('token');
-          window.location.href = '/login';
+      localStorage.removeItem('token');
+      window.location.href = '/login';
           break;
         case 403:
           toast.error('Access denied');

@@ -185,7 +185,7 @@ const LoadingMessage = styled.div`
 
 const ContentTypeSelector = ({ 
   selectedTypes = [], 
-  onTypesChange,
+  onTypesChange, 
   variables = {}, 
   onVariablesChange,
   availableTypes = {} 
