@@ -26,6 +26,15 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', port: PORT });
 });
 
+// Test endpoint to check if routes are working
+app.get('/test-routes', (req, res) => {
+  res.status(200).json({ 
+    message: 'Routes are working',
+    timestamp: new Date().toISOString(),
+    port: PORT
+  });
+});
+
 // Trust proxy for Railway deployment
 app.set('trust proxy', 1);
 
@@ -94,56 +103,33 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint is already defined above
 
-// API routes
-console.log('Loading API routes...');
-try {
-  app.use('/api/auth', authRoutes);
-  console.log('✅ Auth routes loaded');
-} catch (error) {
-  console.error('❌ Error loading auth routes:', error);
-}
+// Simple test login endpoint
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    console.log('Simple login attempt:', req.body);
+    res.json({
+      success: true,
+      message: 'Simple login endpoint working',
+      user: { email: req.body.email, name: 'Test User' },
+      token: 'test-token'
+    });
+  } catch (error) {
+    console.error('Simple login error:', error);
+    res.status(500).json({
+      error: 'Server error',
+      message: 'Failed to login'
+    });
+  }
+});
 
-try {
-  app.use('/api/users', userRoutes);
-  console.log('✅ User routes loaded');
-} catch (error) {
-  console.error('❌ Error loading user routes:', error);
-}
-
-try {
-  app.use('/api/campaigns', campaignRoutes);
-  console.log('✅ Campaign routes loaded');
-} catch (error) {
-  console.error('❌ Error loading campaign routes:', error);
-}
-
-try {
-  app.use('/api/wordpress', wordpressRoutes);
-  console.log('✅ WordPress routes loaded');
-} catch (error) {
-  console.error('❌ Error loading WordPress routes:', error);
-}
-
-try {
-  app.use('/api/license', licenseRoutes);
-  console.log('✅ License routes loaded');
-} catch (error) {
-  console.error('❌ Error loading license routes:', error);
-}
-
-try {
-  app.use('/api/admin', adminRoutes);
-  console.log('✅ Admin routes loaded');
-} catch (error) {
-  console.error('❌ Error loading admin routes:', error);
-}
-
-try {
-  app.use('/api/title-queue', titleQueueRoutes);
-  console.log('✅ Title queue routes loaded');
-} catch (error) {
-  console.error('❌ Error loading title queue routes:', error);
-}
+// API routes (temporarily disabled for debugging)
+// console.log('Loading API routes...');
+// try {
+//   app.use('/api/auth', authRoutes);
+//   console.log('✅ Auth routes loaded');
+// } catch (error) {
+//   console.error('❌ Error loading auth routes:', error);
+// }
 
 // Global error handler
 app.use((err, req, res, next) => {
