@@ -103,24 +103,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Health check endpoint is already defined above
 
-// Simple test login endpoint
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    console.log('Simple login attempt:', req.body);
-    res.json({
-      success: true,
-      message: 'Simple login endpoint working',
-      user: { email: req.body.email, name: 'Test User' },
-      token: 'test-token'
-    });
-  } catch (error) {
-    console.error('Simple login error:', error);
-    res.status(500).json({
-      error: 'Server error',
-      message: 'Failed to login'
-    });
-  }
-});
+// Simple test login endpoint removed - using real auth routes
 
 // API routes (restored after deployment success)
 console.log('Loading API routes...');
