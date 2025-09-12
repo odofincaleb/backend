@@ -21,7 +21,7 @@ const StatusContainer = styled.div`
   transition: all 0.3s ease;
   cursor: pointer;
   background: ${props => {
-    switch (props.connectionStatus) {
+    switch (props.$connectionStatus) {
       case 'connected': return props.theme.colors.success;
       case 'disconnected': return props.theme.colors.error;
       case 'reconnecting': return props.theme.colors.warning;
@@ -144,7 +144,7 @@ const ConnectionStatus = () => {
 
   return (
     <StatusContainer 
-      connectionStatus={status}
+      $connectionStatus={status}
       onClick={handleClick}
       title={status === 'disconnected' ? 'Click to retry connection' : undefined}
     >

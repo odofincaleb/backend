@@ -124,6 +124,11 @@ export const campaignsAPI = {
     url: '/campaigns'
   }),
   
+  getCampaigns: () => retryRequest({
+    method: 'GET',
+    url: '/campaigns'
+  }),
+  
   getById: (id) => retryRequest({
     method: 'GET',
     url: `/campaigns/${id}`
@@ -155,6 +160,11 @@ export const campaignsAPI = {
 // WordPress API
 export const wordpressAPI = {
   getAll: () => retryRequest({
+    method: 'GET',
+    url: '/wordpress'
+  }),
+  
+  getSites: () => retryRequest({
     method: 'GET',
     url: '/wordpress'
   }),

@@ -122,14 +122,56 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// API routes (temporarily disabled for debugging)
-// console.log('Loading API routes...');
-// try {
-//   app.use('/api/auth', authRoutes);
-//   console.log('✅ Auth routes loaded');
-// } catch (error) {
-//   console.error('❌ Error loading auth routes:', error);
-// }
+// API routes (restored after deployment success)
+console.log('Loading API routes...');
+try {
+  app.use('/api/auth', authRoutes);
+  console.log('✅ Auth routes loaded');
+} catch (error) {
+  console.error('❌ Error loading auth routes:', error);
+}
+
+try {
+  app.use('/api/users', userRoutes);
+  console.log('✅ User routes loaded');
+} catch (error) {
+  console.error('❌ Error loading user routes:', error);
+}
+
+try {
+  app.use('/api/campaigns', campaignRoutes);
+  console.log('✅ Campaign routes loaded');
+} catch (error) {
+  console.error('❌ Error loading campaign routes:', error);
+}
+
+try {
+  app.use('/api/wordpress', wordpressRoutes);
+  console.log('✅ WordPress routes loaded');
+} catch (error) {
+  console.error('❌ Error loading WordPress routes:', error);
+}
+
+try {
+  app.use('/api/license', licenseRoutes);
+  console.log('✅ License routes loaded');
+} catch (error) {
+  console.error('❌ Error loading license routes:', error);
+}
+
+try {
+  app.use('/api/admin', adminRoutes);
+  console.log('✅ Admin routes loaded');
+} catch (error) {
+  console.error('❌ Error loading admin routes:', error);
+}
+
+try {
+  app.use('/api/title-queue', titleQueueRoutes);
+  console.log('✅ Title Queue routes loaded');
+} catch (error) {
+  console.error('❌ Error loading title queue routes:', error);
+}
 
 // Global error handler
 app.use((err, req, res, next) => {
