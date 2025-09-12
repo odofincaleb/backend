@@ -19,6 +19,58 @@ const registerSchema = Joi.object({
   name: Joi.string().required()
 });
 
+// Test endpoint to create a test user
+router.post('/create-test-user', async (req, res) => {
+  try {
+    console.log('Creating test user...');
+    
+    const testEmail = 'test@example.com';
+    const testPassword = 'Password123';
+    const testName = 'Test User';
+    
+    // Check if test user already exists
+    const existingUser = await query(
+      'SELECT id FROM users WHERE email = $1',
+      [testEmail]
+    );
+    
+    if (existingUser.rows.length > 0) {
+      console.log('Test user already exists');
+      return res.json({
+        success: true,
+        message: 'Test user already exists',
+        user: { email: testEmail, name: testName }
+      });
+    }
+    
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(testPassword, salt);
+    
+    // Create test user
+    const result = await query(
+      'INSERT INTO users (email, password, name, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING id, email, name',
+      [testEmail, hashedPassword, testName]
+    );
+    
+    const user = result.rows[0];
+    console.log('Test user created successfully:', user);
+    
+    res.json({
+      success: true,
+      message: 'Test user created successfully',
+      user
+    });
+  } catch (error) {
+    console.error('Error creating test user:', error);
+    res.status(500).json({
+      error: 'Server error',
+      message: 'Failed to create test user',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Login route
 router.post('/login', async (req, res) => {
   try {
