@@ -95,13 +95,55 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Health check endpoint is already defined above
 
 // API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/campaigns', campaignRoutes);
-app.use('/api/wordpress', wordpressRoutes);
-app.use('/api/license', licenseRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/title-queue', titleQueueRoutes);
+console.log('Loading API routes...');
+try {
+  app.use('/api/auth', authRoutes);
+  console.log('✅ Auth routes loaded');
+} catch (error) {
+  console.error('❌ Error loading auth routes:', error);
+}
+
+try {
+  app.use('/api/users', userRoutes);
+  console.log('✅ User routes loaded');
+} catch (error) {
+  console.error('❌ Error loading user routes:', error);
+}
+
+try {
+  app.use('/api/campaigns', campaignRoutes);
+  console.log('✅ Campaign routes loaded');
+} catch (error) {
+  console.error('❌ Error loading campaign routes:', error);
+}
+
+try {
+  app.use('/api/wordpress', wordpressRoutes);
+  console.log('✅ WordPress routes loaded');
+} catch (error) {
+  console.error('❌ Error loading WordPress routes:', error);
+}
+
+try {
+  app.use('/api/license', licenseRoutes);
+  console.log('✅ License routes loaded');
+} catch (error) {
+  console.error('❌ Error loading license routes:', error);
+}
+
+try {
+  app.use('/api/admin', adminRoutes);
+  console.log('✅ Admin routes loaded');
+} catch (error) {
+  console.error('❌ Error loading admin routes:', error);
+}
+
+try {
+  app.use('/api/title-queue', titleQueueRoutes);
+  console.log('✅ Title queue routes loaded');
+} catch (error) {
+  console.error('❌ Error loading title queue routes:', error);
+}
 
 // Global error handler
 app.use((err, req, res, next) => {
