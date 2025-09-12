@@ -22,9 +22,13 @@ const registerSchema = Joi.object({
 // Login route
 router.post('/login', async (req, res) => {
   try {
+    console.log('Login attempt received:', { email: req.body.email });
+    logger.info('Login attempt received:', { email: req.body.email });
+    
     // Validate request body
     const { error, value } = loginSchema.validate(req.body);
     if (error) {
+      console.log('Validation error:', error.details[0].message);
       return res.status(400).json({
         error: 'Validation error',
         message: error.details[0].message
@@ -32,15 +36,19 @@ router.post('/login', async (req, res) => {
     }
 
     const { email, password } = value;
+    console.log('Validated login data for:', email);
 
     // Find user
+    console.log('Querying database for user:', email);
     const result = await query(
       'SELECT * FROM users WHERE email = $1',
       [email]
     );
+    console.log('Database query result:', result.rows.length, 'users found');
 
     const user = result.rows[0];
     if (!user) {
+      console.log('User not found:', email);
       return res.status(401).json({
         error: 'Authentication failed',
         message: 'Invalid email or password'
@@ -48,8 +56,10 @@ router.post('/login', async (req, res) => {
     }
 
     // Check password
+    console.log('Checking password for user:', user.email);
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
+      console.log('Invalid password for user:', user.email);
       return res.status(401).json({
         error: 'Authentication failed',
         message: 'Invalid email or password'
@@ -57,11 +67,18 @@ router.post('/login', async (req, res) => {
     }
 
     // Generate token
+    console.log('Generating JWT token for user:', user.id);
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET is not set!');
+      throw new Error('JWT_SECRET environment variable is not set');
+    }
+    
     const token = jwt.sign(
       { id: user.id },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
+    console.log('JWT token generated successfully');
 
     // Remove password from user object
     delete user.password;
@@ -75,10 +92,12 @@ router.post('/login', async (req, res) => {
       token
     });
   } catch (error) {
+    console.error('Login error:', error);
     logger.error('Login error:', error);
     res.status(500).json({
       error: 'Server error',
-      message: 'Failed to login'
+      message: 'Failed to login',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
