@@ -1,0 +1,9 @@
+@echo off
+echo Adding files to git...
+git add .
+echo Committing changes...
+git commit -m "Fix route loading issues and add debugging"
+echo Pushing to GitHub...
+git push origin master
+echo Deployment triggered!
+pause

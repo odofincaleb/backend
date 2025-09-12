@@ -35,6 +35,14 @@ app.get('/test-routes', (req, res) => {
   });
 });
 
+// Test campaigns endpoint
+app.get('/api/campaigns/test', (req, res) => {
+  res.status(200).json({ 
+    message: 'Campaigns test endpoint working',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Trust proxy for Railway deployment
 app.set('trust proxy', 1);
 
@@ -107,11 +115,13 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // API routes (restored after deployment success)
 console.log('Loading API routes...');
+console.log('Auth routes object:', typeof authRoutes, authRoutes ? 'exists' : 'undefined');
 try {
   app.use('/api/auth', authRoutes);
-  console.log('✅ Auth routes loaded');
+  console.log('✅ Auth routes loaded successfully');
 } catch (error) {
   console.error('❌ Error loading auth routes:', error);
+  console.error('Error stack:', error.stack);
 }
 
 try {
@@ -121,11 +131,13 @@ try {
   console.error('❌ Error loading user routes:', error);
 }
 
+console.log('Campaign routes object:', typeof campaignRoutes, campaignRoutes ? 'exists' : 'undefined');
 try {
   app.use('/api/campaigns', campaignRoutes);
-  console.log('✅ Campaign routes loaded');
+  console.log('✅ Campaign routes loaded successfully');
 } catch (error) {
   console.error('❌ Error loading campaign routes:', error);
+  console.error('Error stack:', error.stack);
 }
 
 try {
