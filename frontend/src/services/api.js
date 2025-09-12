@@ -6,13 +6,9 @@ const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'https://backend-production-8c02.up.railway.app/api',
   timeout: 30000, // 30 seconds
   headers: {
-    'Content-Type': 'application/json',
-    'Connection': 'keep-alive',
-    'Keep-Alive': 'timeout=30, max=100'
+    'Content-Type': 'application/json'
   },
-  // Enable keep-alive
-  httpAgent: new axios.HttpAgent({ keepAlive: true }),
-  httpsAgent: new axios.HttpsAgent({ keepAlive: true })
+  // Keep-alive is handled by the browser automatically
 });
 
 // Add retry logic with exponential backoff
