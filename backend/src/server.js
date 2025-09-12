@@ -134,7 +134,7 @@ app.use((err, req, res, next) => {
 const server = http.createServer({
   keepAlive: true,
   keepAliveTimeout: 60000, // 60 seconds
-  headersTimeout: 65000, // slightly higher than keepAliveTimeout
+  headersTimeout: 30000, // must be <= requestTimeout
   requestTimeout: 30000, // 30 seconds
   timeout: 30000 // 30 seconds
 }, app);
@@ -168,21 +168,12 @@ server.on('connection', (socket) => {
 // Start server
 const startServer = () => {
   try {
-    console.log('Creating HTTP server...');
-    const server = http.createServer(app);
-    
     console.log('Starting to listen on port:', PORT);
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`Server successfully listening on port ${PORT}`);
       logger.info(`🚀 Fiddy AutoPublisher API server running on port ${PORT}`);
       logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
       logger.info(`🔗 Health check: http://0.0.0.0:${PORT}/health`);
-    });
-
-    server.on('error', (error) => {
-      console.error('Server error:', error);
-      logger.error('Server error:', error);
-      throw error;
     });
 
     // Handle graceful shutdown
