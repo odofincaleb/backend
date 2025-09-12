@@ -19,6 +19,56 @@ const registerSchema = Joi.object({
   name: Joi.string().required()
 });
 
+// Test endpoint to check environment and database
+router.get('/health-check', async (req, res) => {
+  try {
+    console.log('Health check requested');
+    
+    // Check environment variables
+    const envCheck = {
+      JWT_SECRET: process.env.JWT_SECRET ? 'SET' : 'NOT SET',
+      NODE_ENV: process.env.NODE_ENV || 'NOT SET',
+      DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET'
+    };
+    
+    // Test database connection
+    let dbCheck = 'UNKNOWN';
+    try {
+      const result = await query('SELECT NOW() as current_time');
+      dbCheck = 'CONNECTED';
+      console.log('Database connected, current time:', result.rows[0].current_time);
+    } catch (dbError) {
+      dbCheck = 'ERROR: ' + dbError.message;
+      console.error('Database error:', dbError);
+    }
+    
+    // Check if test user exists
+    let userCheck = 'UNKNOWN';
+    try {
+      const userResult = await query('SELECT id, email FROM users WHERE email = $1', ['test@example.com']);
+      userCheck = userResult.rows.length > 0 ? 'EXISTS' : 'NOT FOUND';
+      console.log('Test user check:', userCheck);
+    } catch (userError) {
+      userCheck = 'ERROR: ' + userError.message;
+      console.error('User check error:', userError);
+    }
+    
+    res.json({
+      success: true,
+      environment: envCheck,
+      database: dbCheck,
+      testUser: userCheck,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Health check error:', error);
+    res.status(500).json({
+      error: 'Health check failed',
+      message: error.message
+    });
+  }
+});
+
 // Test endpoint to create a test user
 router.post('/create-test-user', async (req, res) => {
   try {
