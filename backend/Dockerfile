@@ -1,33 +1,23 @@
-# Use Node.js 18 as base image
-FROM node:18-slim
+# Use Node.js 18 Alpine for smaller image size
+FROM node:18-alpine
 
-# Install build dependencies
-RUN apt-get update && \
-    apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create app directory
+# Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies and rebuild bcrypt
-RUN npm install && npm rebuild bcrypt --build-from-source
+# Install dependencies using npm install (not npm ci)
+RUN npm install --legacy-peer-deps
 
-# Copy app source
+# Copy source code
 COPY . .
 
-# Set environment variables
-ENV NODE_ENV=production
-ENV PORT=5000
+# Create logs directory
+RUN mkdir -p logs
 
 # Expose port
-EXPOSE 5000
+EXPOSE 3000
 
-# Start the app
+# Start the application
 CMD ["npm", "start"]
