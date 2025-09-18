@@ -5,9 +5,9 @@ const helmet = require('helmet');
 const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const http = require('http');
 
 const logger = require('./utils/logger');
+const { testConnection } = require('./database/connection');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -18,257 +18,186 @@ const licenseRoutes = require('./routes/license');
 const adminRoutes = require('./routes/admin');
 const titleQueueRoutes = require('./routes/titleQueue');
 
+// Import services
+const campaignScheduler = require('./services/campaignScheduler');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-// Basic health check (before any middleware)
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', port: PORT });
-});
-
-// Test endpoint to check if routes are working
-app.get('/test-routes', (req, res) => {
-  res.status(200).json({ 
-    message: 'Routes are working',
-    timestamp: new Date().toISOString(),
-    port: PORT
-  });
-});
-
-// Test campaigns endpoint
-app.get('/api/campaigns/test', (req, res) => {
-  res.status(200).json({ 
-    message: 'Campaigns test endpoint working',
-    timestamp: new Date().toISOString()
-  });
-});
 
 // Trust proxy for Railway deployment
 app.set('trust proxy', 1);
 
 // Security middleware
 app.use(helmet({
-  contentSecurityPolicy: false, // Disable CSP for development
-  crossOriginEmbedderPolicy: false // Allow embedding in iframes
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
 }));
 
 // CORS configuration
-const corsOptions = {
-  origin: (origin, callback) => {
+app.use(cors({
+  origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    // List of allowed origins
     const allowedOrigins = [
       'http://localhost:3000',
-      'http://localhost:5000',
+      'http://localhost:3001',
+      'https://yourdomain.com',
       'https://fiddy-autopublisher.vercel.app',
-      'https://backend-production-8c02.up.railway.app'
+      'https://fiddy-autopublisher.netlify.app'
     ];
     
-    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+    if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(null, true); // Allow all origins for testing
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Keep-Alive', 'Connection'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range', 'Keep-Alive', 'Connection'],
-  maxAge: 86400 // 24 hours
-};
-
-app.use(cors(corsOptions));
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // limit each IP to 1000 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  skip: (req) => {
-    // Skip rate limiting for health checks
-    return req.path === '/health';
-  }
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+  message: {
+    error: 'Too many requests from this IP, please try again later.',
+    retryAfter: Math.ceil((parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000) / 1000)
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-// Apply rate limiter to all routes
 app.use(limiter);
 
 // Compression middleware
 app.use(compression());
 
 // Logging middleware
-if (process.env.NODE_ENV !== 'test') {
-  app.use(morgan('dev'));
+app.use(morgan('combined', {
+  stream: {
+    write: (message) => logger.http(message.trim())
   }
+}));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint is already defined above
-
-// Simple test login endpoint removed - using real auth routes
-
-// API routes (restored after deployment success)
-console.log('Loading API routes...');
-console.log('Auth routes object:', typeof authRoutes, authRoutes ? 'exists' : 'undefined');
-try {
-  app.use('/api/auth', authRoutes);
-  console.log('✅ Auth routes loaded successfully');
-} catch (error) {
-  console.error('❌ Error loading auth routes:', error);
-  console.error('Error stack:', error.stack);
-}
-
-try {
-  app.use('/api/users', userRoutes);
-  console.log('✅ User routes loaded');
-} catch (error) {
-  console.error('❌ Error loading user routes:', error);
-}
-
-console.log('Campaign routes object:', typeof campaignRoutes, campaignRoutes ? 'exists' : 'undefined');
-try {
-  app.use('/api/campaigns', campaignRoutes);
-  console.log('✅ Campaign routes loaded successfully');
-} catch (error) {
-  console.error('❌ Error loading campaign routes:', error);
-  console.error('Error stack:', error.stack);
-}
-
-try {
-  app.use('/api/wordpress', wordpressRoutes);
-  console.log('✅ WordPress routes loaded');
-} catch (error) {
-  console.error('❌ Error loading WordPress routes:', error);
-}
-
-try {
-  app.use('/api/license', licenseRoutes);
-  console.log('✅ License routes loaded');
-} catch (error) {
-  console.error('❌ Error loading license routes:', error);
-}
-
-try {
-  app.use('/api/admin', adminRoutes);
-  console.log('✅ Admin routes loaded');
-} catch (error) {
-  console.error('❌ Error loading admin routes:', error);
-}
-
-try {
-  app.use('/api/title-queue', titleQueueRoutes);
-  console.log('✅ Title Queue routes loaded');
-} catch (error) {
-  console.error('❌ Error loading title queue routes:', error);
-}
-
-// Global error handler
-app.use((err, req, res, next) => {
-  logger.error('Global error handler:', err);
-  
-  // Handle specific error types
-  if (err.name === 'UnauthorizedError') {
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Invalid or expired token'
-    });
-  }
-  
-  if (err.name === 'ValidationError') {
-    return res.status(400).json({
-      error: 'Validation Error',
-      message: err.message
-    });
-  }
-  
-  // Default error response
-  res.status(err.status || 500).json({
-    error: err.name || 'Internal Server Error',
-    message: err.message || 'Something went wrong',
-    details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
-// Create HTTP server with custom settings
-const server = http.createServer({
-  keepAlive: true,
-  keepAliveTimeout: 60000, // 60 seconds
-  headersTimeout: 30000, // must be <= requestTimeout
-  requestTimeout: 30000, // 30 seconds
-  timeout: 30000 // 30 seconds
-}, app);
+// API routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/campaigns', campaignRoutes);
+app.use('/api/wordpress', wordpressRoutes);
+app.use('/api/license', licenseRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/title-queue', titleQueueRoutes);
 
-// Add error handlers
-server.on('error', (error) => {
-  logger.error('Server error:', error);
-  if (error.syscall !== 'listen') {
-    throw error;
-  }
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    message: `Cannot ${req.method} ${req.originalUrl}`
+  });
+});
 
-  switch (error.code) {
-    case 'EACCES':
-      logger.error(`Port ${PORT} requires elevated privileges`);
+// Global error handler
+app.use((err, req, res, next) => {
+  logger.error('Unhandled error:', {
+    error: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method,
+    ip: req.ip
+  });
+
+  // Don't leak error details in production
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
+  res.status(err.status || 500).json({
+    error: 'Internal server error',
+    message: isDevelopment ? err.message : 'Something went wrong',
+    ...(isDevelopment && { stack: err.stack })
+  });
+});
+
+// Graceful shutdown
+const gracefulShutdown = async (signal) => {
+  logger.info(`Received ${signal}. Starting graceful shutdown...`);
+  
+  try {
+    // Stop campaign scheduler
+    campaignScheduler.stop();
+    logger.info('Campaign scheduler stopped');
+    
+    // Close database connections
+    const { closePool } = require('./database/connection');
+    await closePool();
+    
+    // Close server
+    server.close(() => {
+      logger.info('Server closed successfully');
+      process.exit(0);
+    });
+    
+    // Force close after 10 seconds
+    setTimeout(() => {
+      logger.error('Forced shutdown after timeout');
       process.exit(1);
-      break;
-    case 'EADDRINUSE':
-      logger.error(`Port ${PORT} is already in use`);
+    }, 10000);
+    
+  } catch (error) {
+    logger.error('Error during graceful shutdown:', error);
     process.exit(1);
-      break;
-    default:
-      throw error;
   }
-});
-
-server.on('connection', (socket) => {
-  // Enable keep-alive on all sockets
-  socket.setKeepAlive(true, 30000); // 30 seconds
-});
+};
 
 // Start server
-const startServer = () => {
+const startServer = async () => {
   try {
-    console.log('Starting to listen on port:', PORT);
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log(`Server successfully listening on port ${PORT}`);
+    // Test database connection
+    const dbConnected = await testConnection();
+    if (!dbConnected) {
+      throw new Error('Database connection failed');
+    }
+
+    const server = app.listen(PORT, () => {
       logger.info(`🚀 Fiddy AutoPublisher API server running on port ${PORT}`);
       logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      logger.info(`🔗 Health check: http://0.0.0.0:${PORT}/health`);
+      logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
     });
+
+    // Start campaign scheduler (with delay to ensure database is ready)
+    setTimeout(() => {
+      try {
+        campaignScheduler.start();
+        logger.info('🤖 Campaign scheduler started');
+      } catch (error) {
+        logger.error('Failed to start campaign scheduler:', error);
+      }
+    }, 5000); // 5 second delay
 
     // Handle graceful shutdown
-    process.on('SIGTERM', () => {
-      logger.info('Received SIGTERM. Starting graceful shutdown...');
-      server.close(() => {
-        logger.info('Server closed');
-        process.exit(0);
-      });
-
-      // Force close after 30 seconds
-      setTimeout(() => {
-        logger.warn('Could not close connections in time, forcefully shutting down');
-        process.exit(1);
-      }, 30000);
-    });
-
-    process.on('SIGINT', () => {
-      logger.info('Received SIGINT. Starting graceful shutdown...');
-      server.close(() => {
-        logger.info('Server closed');
-        process.exit(0);
-      });
-
-      // Force close after 30 seconds
-      setTimeout(() => {
-        logger.warn('Could not close connections in time, forcefully shutting down');
-        process.exit(1);
-      }, 30000);
-    });
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
     
     return server;
   } catch (error) {
@@ -278,18 +207,7 @@ const startServer = () => {
 };
 
 // Start the server
-try {
-  console.log('Starting server...');
-  console.log('PORT:', PORT);
-  console.log('NODE_ENV:', process.env.NODE_ENV);
-  
-  const serverInstance = startServer();
-  console.log('Server startup initiated successfully');
-  logger.info('Server startup initiated');
-} catch (error) {
-  console.error('Failed to start server:', error);
-  logger.error('Failed to start server:', error);
-  process.exit(1);
-}
+const server = startServer();
 
 module.exports = app;
+

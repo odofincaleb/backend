@@ -1,248 +1,49 @@
 const express = require('express');
-const router = express.Router();
 const Joi = require('joi');
-const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { query } = require('../database/connection');
+const { hashPassword, comparePassword } = require('../utils/encryption');
 const { authenticateToken } = require('../middleware/auth');
 const logger = require('../utils/logger');
 
+const router = express.Router();
+
 // Validation schemas
+const registerSchema = Joi.object({
+  email: Joi.string().email().required(),
+  password: Joi.string().min(8).required(),
+  firstName: Joi.string().min(2).max(50).required(),
+  lastName: Joi.string().min(2).max(50).required()
+});
+
 const loginSchema = Joi.object({
   email: Joi.string().email().required(),
   password: Joi.string().required()
 });
 
-const registerSchema = Joi.object({
-  email: Joi.string().email().required(),
-  password: Joi.string().min(8).required(),
-  name: Joi.string().required()
+const changePasswordSchema = Joi.object({
+  currentPassword: Joi.string().required(),
+  newPassword: Joi.string().min(8).required()
 });
 
-// Test endpoint to test database query specifically
-router.get('/test-db-query', async (req, res) => {
-  try {
-    console.log('Testing database query for test user...');
-    
-    const result = await query(
-      'SELECT * FROM users WHERE email = $1',
-      ['test@example.com']
-    );
-    
-    console.log('Database query result:', result.rows.length, 'users found');
-    if (result.rows.length > 0) {
-      const user = result.rows[0];
-      console.log('User found:', { id: user.id, email: user.email, name: user.name });
-      // Don't log the password hash for security
-    }
-    
-    res.json({
-      success: true,
-      userCount: result.rows.length,
-      user: result.rows.length > 0 ? {
-        id: result.rows[0].id,
-        email: result.rows[0].email,
-        name: result.rows[0].name
-      } : null
-    });
-  } catch (error) {
-    console.error('Database query error:', error);
-    res.status(500).json({
-      error: 'Database query failed',
-      message: error.message
-    });
-  }
-});
+/**
+ * Generate JWT token
+ */
+const generateToken = (userId) => {
+  return jwt.sign(
+    { userId },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+  );
+};
 
-// Test endpoint to check environment and database
-router.get('/health-check', async (req, res) => {
-  try {
-    console.log('Health check requested');
-    
-    // Check environment variables
-    const envCheck = {
-      JWT_SECRET: process.env.JWT_SECRET ? 'SET' : 'NOT SET',
-      NODE_ENV: process.env.NODE_ENV || 'NOT SET',
-      DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET'
-    };
-    
-    // Test database connection
-    let dbCheck = 'UNKNOWN';
-    try {
-      const result = await query('SELECT NOW() as current_time');
-      dbCheck = 'CONNECTED';
-      console.log('Database connected, current time:', result.rows[0].current_time);
-    } catch (dbError) {
-      dbCheck = 'ERROR: ' + dbError.message;
-      console.error('Database error:', dbError);
-    }
-    
-    // Check if test user exists
-    let userCheck = 'UNKNOWN';
-    try {
-      const userResult = await query('SELECT id, email FROM users WHERE email = $1', ['test@example.com']);
-      userCheck = userResult.rows.length > 0 ? 'EXISTS' : 'NOT FOUND';
-      console.log('Test user check:', userCheck);
-    } catch (userError) {
-      userCheck = 'ERROR: ' + userError.message;
-      console.error('User check error:', userError);
-    }
-    
-    res.json({
-      success: true,
-      environment: envCheck,
-      database: dbCheck,
-      testUser: userCheck,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Health check error:', error);
-    res.status(500).json({
-      error: 'Health check failed',
-      message: error.message
-    });
-  }
-});
-
-// Test endpoint to create a test user
-router.post('/create-test-user', async (req, res) => {
-  try {
-    console.log('Creating test user...');
-    
-    const testEmail = 'test@example.com';
-    const testPassword = 'Password123';
-    const testName = 'Test User';
-    
-    // Check if test user already exists
-    const existingUser = await query(
-      'SELECT id FROM users WHERE email = $1',
-      [testEmail]
-    );
-    
-    if (existingUser.rows.length > 0) {
-      console.log('Test user already exists');
-      return res.json({
-        success: true,
-        message: 'Test user already exists',
-        user: { email: testEmail, name: testName }
-      });
-    }
-    
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(testPassword, salt);
-    
-    // Create test user
-    const result = await query(
-      'INSERT INTO users (email, password, name, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING id, email, name',
-      [testEmail, hashedPassword, testName]
-    );
-    
-    const user = result.rows[0];
-    console.log('Test user created successfully:', user);
-    
-    res.json({
-      success: true,
-      message: 'Test user created successfully',
-      user
-    });
-  } catch (error) {
-    console.error('Error creating test user:', error);
-    res.status(500).json({
-      error: 'Server error',
-      message: 'Failed to create test user',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Login route
-router.post('/login', async (req, res) => {
-  try {
-    console.log('Login attempt received:', { email: req.body.email });
-    logger.info('Login attempt received:', { email: req.body.email });
-    
-    // Validate request body
-    const { error, value } = loginSchema.validate(req.body);
-    if (error) {
-      console.log('Validation error:', error.details[0].message);
-      return res.status(400).json({
-        error: 'Validation error',
-        message: error.details[0].message
-      });
-    }
-
-    const { email, password } = value;
-    console.log('Validated login data for:', email);
-
-    // Find user
-    console.log('Querying database for user:', email);
-    const result = await query(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
-    );
-    console.log('Database query result:', result.rows.length, 'users found');
-
-    const user = result.rows[0];
-    if (!user) {
-      console.log('User not found:', email);
-      return res.status(401).json({
-        error: 'Authentication failed',
-        message: 'Invalid email or password'
-      });
-    }
-
-    // Check password
-    console.log('Checking password for user:', user.email);
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) {
-      console.log('Invalid password for user:', user.email);
-      return res.status(401).json({
-        error: 'Authentication failed',
-        message: 'Invalid email or password'
-      });
-    }
-
-    // Generate token
-    console.log('Generating JWT token for user:', user.id);
-    if (!process.env.JWT_SECRET) {
-      console.error('JWT_SECRET is not set!');
-      throw new Error('JWT_SECRET environment variable is not set');
-    }
-    
-    const token = jwt.sign(
-      { id: user.id },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-    console.log('JWT token generated successfully');
-
-    // Remove password from user object
-    delete user.password;
-
-    // Log successful login
-    logger.info(`User logged in successfully: ${user.email}`);
-
-    res.json({
-      success: true,
-      user,
-      token
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    logger.error('Login error:', error);
-    res.status(500).json({
-      error: 'Server error',
-      message: 'Failed to login',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Register route
+/**
+ * POST /api/auth/register
+ * Register a new user
+ */
 router.post('/register', async (req, res) => {
   try {
-    // Validate request body
+    // Validate input
     const { error, value } = registerSchema.validate(req.body);
     if (error) {
       return res.status(400).json({
@@ -251,96 +52,209 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    const { email, password, name } = value;
+    const { email, password, firstName, lastName } = value;
 
-    // Check if user exists
+    // Check if user already exists
     const existingUser = await query(
       'SELECT id FROM users WHERE email = $1',
       [email]
     );
 
     if (existingUser.rows.length > 0) {
-      return res.status(400).json({
-        error: 'Registration error',
-        message: 'Email already registered'
+      return res.status(409).json({
+        error: 'User already exists',
+        message: 'An account with this email already exists'
       });
     }
 
     // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const passwordHash = await hashPassword(password);
 
     // Create user
     const result = await query(
-      `INSERT INTO users (email, password, name, created_at, updated_at)
-      VALUES ($1, $2, $3, NOW(), NOW())
-      RETURNING id, email, name, created_at`,
-      [email, hashedPassword, name]
+      `INSERT INTO users (email, password_hash, first_name, last_name, subscription_tier)
+       VALUES ($1, $2, $3, $4, 'trial')
+       RETURNING id, email, first_name, last_name, subscription_tier, created_at`,
+      [email, passwordHash, firstName, lastName]
     );
 
     const user = result.rows[0];
 
     // Generate token
-    const token = jwt.sign(
-      { id: user.id },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
+    const token = generateToken(user.id);
+
+    // Log registration
+    await query(
+      `INSERT INTO logs (user_id, event_type, message, severity)
+       VALUES ($1, 'user_registered', 'New user registered', 'info')`,
+      [user.id]
     );
 
-    // Log successful registration
-    logger.info(`New user registered: ${user.email}`);
+    logger.info('New user registered:', { email, userId: user.id });
 
     res.status(201).json({
-      success: true,
-      user,
+      message: 'User registered successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        subscriptionTier: user.subscription_tier
+      },
       token
     });
+
   } catch (error) {
     logger.error('Registration error:', error);
     res.status(500).json({
-      error: 'Server error',
-      message: 'Failed to register'
+      error: 'Internal server error',
+      message: 'Failed to register user'
     });
   }
 });
 
-// Get current user profile
+/**
+ * POST /api/auth/login
+ * Login user
+ */
+router.post('/login', async (req, res) => {
+  try {
+    // Validate input
+    const { error, value } = loginSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: error.details[0].message
+      });
+    }
+
+    const { email, password } = value;
+
+    // Get user
+    const result = await query(
+      `SELECT id, email, password_hash, first_name, last_name, subscription_tier, 
+              is_active, posts_published_this_month, total_posts_published
+       FROM users WHERE email = $1`,
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        error: 'Invalid credentials',
+        message: 'Email or password is incorrect'
+      });
+    }
+
+    const user = result.rows[0];
+
+    // Check if account is active
+    if (!user.is_active) {
+      return res.status(401).json({
+        error: 'Account deactivated',
+        message: 'Your account has been deactivated. Please contact support.'
+      });
+    }
+
+    // Verify password
+    const isValidPassword = await comparePassword(password, user.password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({
+        error: 'Invalid credentials',
+        message: 'Email or password is incorrect'
+      });
+    }
+
+    // Generate token
+    const token = generateToken(user.id);
+
+    // Log login
+    await query(
+      `INSERT INTO logs (user_id, event_type, message, severity)
+       VALUES ($1, 'user_login', 'User logged in', 'info')`,
+      [user.id]
+    );
+
+    logger.info('User logged in:', { email, userId: user.id });
+
+    res.json({
+      message: 'Login successful',
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        subscriptionTier: user.subscription_tier,
+        postsPublishedThisMonth: user.posts_published_this_month,
+        totalPostsPublished: user.total_posts_published
+      },
+      token
+    });
+
+  } catch (error) {
+    logger.error('Login error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to login'
+    });
+  }
+});
+
+/**
+ * GET /api/auth/me
+ * Get current user profile
+ */
 router.get('/me', authenticateToken, async (req, res) => {
   try {
+    const userId = req.user.id;
+
     const result = await query(
-      'SELECT id, email, name, created_at FROM users WHERE id = $1',
-      [req.user.id]
+      `SELECT id, email, first_name, last_name, subscription_tier, 
+              posts_published_this_month, total_posts_published, 
+              max_concurrent_campaigns, support_tier, created_at
+       FROM users WHERE id = $1`,
+      [userId]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({
-        error: 'Not found',
-        message: 'User not found'
+        error: 'User not found'
       });
     }
 
+    const user = result.rows[0];
+
     res.json({
-      success: true,
-      user: result.rows[0]
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        subscriptionTier: user.subscription_tier,
+        postsPublishedThisMonth: user.posts_published_this_month,
+        totalPostsPublished: user.total_posts_published,
+        maxConcurrentCampaigns: user.max_concurrent_campaigns,
+        supportTier: user.support_tier,
+        createdAt: user.created_at
+      }
     });
+
   } catch (error) {
     logger.error('Get profile error:', error);
     res.status(500).json({
-      error: 'Server error',
-      message: 'Failed to get profile'
+      error: 'Internal server error',
+      message: 'Failed to get user profile'
     });
   }
 });
 
-// Change password
+/**
+ * PUT /api/auth/change-password
+ * Change user password
+ */
 router.put('/change-password', authenticateToken, async (req, res) => {
   try {
-    const schema = Joi.object({
-      currentPassword: Joi.string().required(),
-      newPassword: Joi.string().min(8).required()
-    });
-
-    const { error, value } = schema.validate(req.body);
+    // Validate input
+    const { error, value } = changePasswordSchema.validate(req.body);
     if (error) {
       return res.status(400).json({
         error: 'Validation error',
@@ -349,54 +263,82 @@ router.put('/change-password', authenticateToken, async (req, res) => {
     }
 
     const { currentPassword, newPassword } = value;
+    const userId = req.user.id;
 
-    // Get user with password
+    // Get current password hash
     const result = await query(
-      'SELECT * FROM users WHERE id = $1',
-      [req.user.id]
+      'SELECT password_hash FROM users WHERE id = $1',
+      [userId]
     );
 
-    const user = result.rows[0];
-    if (!user) {
+    if (result.rows.length === 0) {
       return res.status(404).json({
-        error: 'Not found',
-        message: 'User not found'
+        error: 'User not found'
       });
     }
 
     // Verify current password
-    const validPassword = await bcrypt.compare(currentPassword, user.password);
-    if (!validPassword) {
+    const isValidPassword = await comparePassword(currentPassword, result.rows[0].password_hash);
+    if (!isValidPassword) {
       return res.status(401).json({
-        error: 'Authentication failed',
+        error: 'Invalid password',
         message: 'Current password is incorrect'
       });
     }
 
     // Hash new password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    const newPasswordHash = await hashPassword(newPassword);
 
     // Update password
     await query(
-      'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2',
-      [hashedPassword, req.user.id]
+      'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [newPasswordHash, userId]
     );
 
     // Log password change
-    logger.info(`Password changed for user: ${user.email}`);
+    await query(
+      `INSERT INTO logs (user_id, event_type, message, severity)
+       VALUES ($1, 'password_changed', 'User changed password', 'info')`,
+      [userId]
+    );
+
+    logger.info('User changed password:', { userId });
 
     res.json({
-      success: true,
       message: 'Password changed successfully'
     });
+
   } catch (error) {
     logger.error('Change password error:', error);
     res.status(500).json({
-      error: 'Server error',
+      error: 'Internal server error',
       message: 'Failed to change password'
     });
   }
 });
 
+/**
+ * POST /api/auth/refresh
+ * Refresh JWT token
+ */
+router.post('/refresh', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const newToken = generateToken(userId);
+
+    res.json({
+      message: 'Token refreshed successfully',
+      token: newToken
+    });
+
+  } catch (error) {
+    logger.error('Token refresh error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to refresh token'
+    });
+  }
+});
+
 module.exports = router;
+

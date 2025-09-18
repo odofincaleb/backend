@@ -4,28 +4,16 @@ const path = require('path');
 async function startApplication() {
   console.log('🚀 Starting Fiddy AutoPublisher Backend...');
 
-  // Run regular migrations (preserves existing data)
+  // Run safe migrations (preserves existing data)
   try {
-    console.log('🔄 Running database migrations...');
-    const { runMigrations } = require('./src/database/migrate.js');
-    await runMigrations();
-    console.log('✅ Database migrations completed');
+    console.log('🔄 Running safe database migrations...');
+    const { safeMigrate } = require('./src/database/safe-migrate.js');
+    await safeMigrate();
+    console.log('✅ Safe database migrations completed - all data preserved!');
   } catch (error) {
-    console.error('❌ Migration failed:', error.message);
-    console.log('⚠️  Skipping force migration to preserve existing data');
-    console.log('🔄 Database might already be set up, continuing...');
-    // Don't run force migration as it deletes all data!
-  }
-
-  // Add missing columns to existing database
-  try {
-    console.log('🔄 Adding missing columns...');
-    const addMissingColumns = require('./add-missing-columns.js');
-    await addMissingColumns();
-    console.log('✅ Missing columns added');
-  } catch (error) {
-    console.error('❌ Adding columns failed:', error.message);
-    // Continue anyway - columns might already exist
+    console.error('❌ Safe migration failed:', error.message);
+    console.log('⚠️ Continuing without migration - database might already be set up');
+    // DO NOT fall back to force migration as it deletes all data!
   }
 
   // Run seed data (only if needed)

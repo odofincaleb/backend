@@ -14,7 +14,8 @@ const encrypt = (text) => {
   
   try {
     const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipher(ALGORITHM, ENCRYPTION_KEY);
+    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
     cipher.setAAD(Buffer.from('fiddy-autopublisher', 'utf8'));
     
     let encrypted = cipher.update(text, 'utf8', 'hex');
@@ -47,7 +48,8 @@ const decrypt = (encryptedText) => {
     const authTag = Buffer.from(parts[1], 'hex');
     const encrypted = parts[2];
     
-    const decipher = crypto.createDecipher(ALGORITHM, ENCRYPTION_KEY);
+    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     decipher.setAAD(Buffer.from('fiddy-autopublisher', 'utf8'));
     decipher.setAuthTag(authTag);
     

@@ -91,6 +91,35 @@ Return the titles as a numbered list (1. Title here, 2. Title here, etc.)`;
   }
 
   /**
+   * Get tone description for title generation
+   * @param {string} tone - Tone of voice
+   * @returns {string} Tone description
+   */
+  getToneDescription(tone) {
+    const toneDescriptions = {
+      'conversational': 'Friendly, approachable, and easy to read',
+      'formal': 'Professional, authoritative, and structured',
+      'humorous': 'Light-hearted, witty, and entertaining',
+      'storytelling': 'Narrative-driven, engaging, and personal'
+    };
+    return toneDescriptions[tone] || toneDescriptions['conversational'];
+  }
+
+  /**
+   * Get style description for title generation
+   * @param {string} style - Writing style
+   * @returns {string} Style description
+   */
+  getStyleDescription(style) {
+    const styleDescriptions = {
+      'pas': 'Problem-Agitation-Solution structure',
+      'aida': 'Attention-Interest-Desire-Action structure',
+      'listicle': 'List-based format with numbered points'
+    };
+    return styleDescriptions[style] || styleDescriptions['pas'];
+  }
+
+  /**
    * Parse generated titles from OpenAI response
    * @param {string} response - OpenAI response text
    * @returns {Array} Array of parsed titles
