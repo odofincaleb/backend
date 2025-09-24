@@ -29,12 +29,7 @@ async function startApplication() {
 
   // Start the server
   console.log('📡 Starting server...');
-  
-  // Import and start the server
-  const { startServer } = require('./src/server.js');
-  await startServer();
-  
-  console.log('✅ Server startup completed');
+  require('./src/server.js');
 }
 
 startApplication().catch(error => {
