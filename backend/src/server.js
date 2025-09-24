@@ -50,7 +50,8 @@ app.use(cors({
       'http://localhost:3001',
       'https://yourdomain.com',
       'https://fiddy-autopublisher.vercel.app',
-      'https://fiddy-autopublisher.netlify.app'
+      'https://fiddy-autopublisher.netlify.app',
+      'https://backend-autoblog.vercel.app'
     ];
     
     if (allowedOrigins.indexOf(origin) !== -1) {
