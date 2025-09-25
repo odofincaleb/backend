@@ -469,8 +469,9 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
 
         // Save the generated content to database
         logger.info(`Saving content to database for title: ${title.title}`);
+        let contentResult;
         try {
-          const contentResult = await query(
+          contentResult = await query(
             `INSERT INTO content_queue (campaign_id, title, generated_content, status)
              VALUES ($1, $2, $3, 'completed')
              RETURNING id, title, generated_content, status, created_at`,
