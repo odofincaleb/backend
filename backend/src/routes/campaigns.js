@@ -1,6 +1,6 @@
 const express = require('express');
 const Joi = require('joi');
-const { query } = require('../database/connection');
+const { query, pool } = require('../database/connection');
 const { authenticateToken, checkCampaignLimit } = require('../middleware/auth');
 const logger = require('../utils/logger');
 const contentTypeTemplates = require('../services/contentTypeTemplates');
@@ -538,62 +538,91 @@ router.put('/:id', authenticateToken, async (req, res) => {
  * Delete a campaign
  */
 router.delete('/:id', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  
   try {
     const userId = req.user.id;
     const campaignId = req.params.id;
 
+    // Start transaction
+    await client.query('BEGIN');
+
     // Check if campaign exists and belongs to user
-    const existingCampaign = await query(
+    const existingCampaign = await client.query(
       'SELECT id FROM campaigns WHERE id = $1 AND user_id = $2',
       [campaignId, userId]
     );
 
     if (existingCampaign.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({
         error: 'Campaign not found'
       });
     }
 
-    // Log campaign deletion BEFORE deleting the campaign
-    await query(
-      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
-       VALUES ($1, $2, 'campaign_deleted', 'Campaign deleted', 'info')`,
-      [userId, campaignId]
-    );
+    // Manually delete related records first to avoid constraint issues
+    try {
+      // Delete from logs table
+      await client.query('DELETE FROM logs WHERE campaign_id = $1', [campaignId]);
+      logger.info('Deleted logs for campaign:', campaignId);
+    } catch (error) {
+      logger.warn('Could not delete logs:', error.message);
+    }
 
-    // Delete campaign (related records will be deleted via CASCADE)
-    await query('DELETE FROM campaigns WHERE id = $1', [campaignId]);
+    try {
+      // Delete from content_queue table
+      await client.query('DELETE FROM content_queue WHERE campaign_id = $1', [campaignId]);
+      logger.info('Deleted content_queue for campaign:', campaignId);
+    } catch (error) {
+      logger.warn('Could not delete content_queue:', error.message);
+    }
 
-    logger.info('Campaign deleted:', { userId, campaignId });
+    try {
+      // Delete from title_queue table
+      await client.query('DELETE FROM title_queue WHERE campaign_id = $1', [campaignId]);
+      logger.info('Deleted title_queue for campaign:', campaignId);
+    } catch (error) {
+      logger.warn('Could not delete title_queue:', error.message);
+    }
+
+    // Now delete the campaign itself
+    await client.query('DELETE FROM campaigns WHERE id = $1', [campaignId]);
+    logger.info('Deleted campaign:', campaignId);
+
+    // Log the deletion
+    try {
+      await client.query(
+        `INSERT INTO logs (user_id, event_type, message, severity)
+         VALUES ($1, 'campaign_deleted', 'Campaign deleted', 'info')`,
+        [userId]
+      );
+    } catch (error) {
+      logger.warn('Could not log campaign deletion:', error.message);
+    }
+
+    // Commit transaction
+    await client.query('COMMIT');
+
+    logger.info('Campaign deleted successfully:', { userId, campaignId });
 
     res.json({
+      success: true,
       message: 'Campaign deleted successfully'
     });
 
   } catch (error) {
+    // Rollback transaction on error
+    await client.query('ROLLBACK');
+    
     logger.error('Delete campaign error:', error);
-    
-    // Check for specific database constraint errors
-    if (error.code === '23503') {
-      return res.status(400).json({
-        error: 'Cannot delete campaign',
-        message: 'Campaign has related records that prevent deletion. Please contact support.'
-      });
-    }
-    
-    // Check for foreign key constraint errors
-    if (error.message && error.message.includes('foreign key')) {
-      return res.status(400).json({
-        error: 'Database constraint error',
-        message: 'Cannot delete campaign due to related records. Please contact support.'
-      });
-    }
     
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to delete campaign',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
+  } finally {
+    client.release();
   }
 });
 
