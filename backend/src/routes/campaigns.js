@@ -28,7 +28,8 @@ const createCampaignSchema = Joi.object({
   wordpressSiteId: Joi.string().uuid().optional(),
   contentTypes: Joi.array().items(Joi.string()).max(5).optional(),
   contentTypeVariables: Joi.object().optional(),
-  titleCount: Joi.number().min(1).max(20).default(5)
+  titleCount: Joi.number().min(1).max(20).default(5),
+  numberOfTitles: Joi.number().min(1).max(20).default(5) // Support both field names
 }).custom((value, helpers) => {
   // Ensure at least one schedule option is provided
   if (!value.schedule && (value.scheduleHours === undefined || value.scheduleHours === null)) {
