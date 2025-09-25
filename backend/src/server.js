@@ -24,7 +24,7 @@ const campaignScheduler = require('./services/campaignScheduler');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Trust proxy for Railway deployment
+// Trust proxy for deployment
 app.set('trust proxy', 1);
 
 // Security middleware
