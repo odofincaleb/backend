@@ -597,8 +597,26 @@ router.get('/campaign/:campaignId', authenticateToken, async (req, res) => {
 
     const content = contentResult.rows.map(item => {
       try {
+        // Check if generated_content exists and is not null/undefined
+        if (!item.generated_content || item.generated_content === null || item.generated_content === 'null') {
+          logger.warn('No generated_content found for item:', item.id);
+          return {
+            id: item.id,
+            title: item.title,
+            originalTitle: item.original_title,
+            content: '',
+            contentType: 'blog-post',
+            wordCount: 0,
+            tone: 'conversational',
+            keywords: [],
+            featuredImage: null,
+            status: item.status,
+            createdAt: item.created_at
+          };
+        }
+
         // Parse the generated_content JSON field
-        const contentData = item.generated_content ? JSON.parse(item.generated_content) : {};
+        const contentData = JSON.parse(item.generated_content);
         
         return {
           id: item.id,
@@ -614,7 +632,7 @@ router.get('/campaign/:campaignId', authenticateToken, async (req, res) => {
           createdAt: item.created_at
         };
       } catch (parseError) {
-        logger.error('Error parsing generated_content for item:', item.id, parseError);
+        logger.error('Error parsing generated_content for item:', item.id, 'Content:', item.generated_content, 'Error:', parseError.message);
         // Return basic data if JSON parsing fails
         return {
           id: item.id,

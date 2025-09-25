@@ -17,6 +17,51 @@ const updateTitleStatusSchema = Joi.object({
 });
 
 /**
+ * GET /api/title-queue/campaign/:campaignId
+ * Get all titles in queue for a specific campaign (frontend compatibility)
+ */
+router.get('/campaign/:campaignId', authenticateToken, async (req, res) => {
+  try {
+    logger.info(`Fetching titles for campaign: ${req.params.campaignId}`);
+    const userId = req.user.id;
+    const campaignId = req.params.campaignId;
+
+    // Verify campaign belongs to user
+    const campaignResult = await query(
+      'SELECT id FROM campaigns WHERE id = $1 AND user_id = $2',
+      [campaignId, userId]
+    );
+
+    if (campaignResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Campaign not found',
+        message: 'The specified campaign does not exist or does not belong to you'
+      });
+    }
+
+    // Get titles for the campaign
+    const result = await query(
+      `SELECT id, title, status, created_at, updated_at
+       FROM title_queue
+       WHERE campaign_id = $1
+       ORDER BY created_at DESC`,
+      [campaignId]
+    );
+
+    res.json({
+      titles: result.rows
+    });
+
+  } catch (error) {
+    logger.error('Get title queue error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to get title queue'
+    });
+  }
+});
+
+/**
  * GET /api/title-queue/:campaignId
  * Get all titles in queue for a specific campaign
  */
