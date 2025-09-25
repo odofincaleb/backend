@@ -22,6 +22,7 @@ const updateTitleStatusSchema = Joi.object({
  */
 router.get('/:campaignId', authenticateToken, async (req, res) => {
   try {
+    logger.info(`Fetching titles for campaign: ${req.params.campaignId}`);
     const userId = req.user.id;
     const campaignId = req.params.campaignId;
 

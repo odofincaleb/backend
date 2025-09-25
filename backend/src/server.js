@@ -51,7 +51,8 @@ app.use(cors({
       'https://yourdomain.com',
       'https://fiddy-autopublisher.vercel.app',
       'https://fiddy-autopublisher.netlify.app',
-      'https://backend-autoblog.vercel.app'
+      'https://backend-autoblog.vercel.app',
+      'https://fiddy-autopublisher-frontend.vercel.app'
     ];
     
     if (allowedOrigins.indexOf(origin) !== -1) {
