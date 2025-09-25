@@ -211,10 +211,10 @@ const CreateCampaign = () => {
       };
 
       if (isEditing) {
-        await campaignsAPI.updateCampaign(id, campaignData);
+        await campaignsAPI.update(id, campaignData);
         toast.success('Campaign updated successfully');
       } else {
-        await campaignsAPI.createCampaign(campaignData);
+        await campaignsAPI.create(campaignData);
         toast.success('Campaign created successfully');
       }
 
@@ -365,7 +365,7 @@ const CreateCampaign = () => {
             <option value="">Select a WordPress Site</option>
               {wordpressSites.map(site => (
                 <option key={site.id} value={site.id}>
-                {site.site_name} ({site.site_url})
+                {site.siteName} ({site.siteUrl})
                 </option>
               ))}
             </Select>
