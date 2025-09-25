@@ -102,7 +102,7 @@ router.post('/generate', authenticateToken, async (req, res) => {
     // Save the generated content to database
     const contentResult = await query(
       `INSERT INTO content_queue (campaign_id, title, generated_content, status)
-       VALUES ($1, $2, $3, 'generated')
+       VALUES ($1, $2, $3, 'completed')
        RETURNING id, title, generated_content, status, created_at`,
       [campaignId, title.title, JSON.stringify({
         content: blogPost.content,
@@ -472,7 +472,7 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
         try {
           const contentResult = await query(
             `INSERT INTO content_queue (campaign_id, title, generated_content, status)
-             VALUES ($1, $2, $3, 'generated')
+             VALUES ($1, $2, $3, 'completed')
              RETURNING id, title, generated_content, status, created_at`,
             [campaignId, title.title, JSON.stringify({
               content: blogPost.content,
