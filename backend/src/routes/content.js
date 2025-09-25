@@ -595,19 +595,42 @@ router.get('/campaign/:campaignId', authenticateToken, async (req, res) => {
       [campaignId]
     );
 
-    const content = contentResult.rows.map(item => ({
-      id: item.id,
-      title: item.title,
-      originalTitle: item.original_title,
-      content: item.content,
-      contentType: item.content_type,
-      wordCount: item.word_count,
-      tone: item.tone,
-      keywords: JSON.parse(item.keywords || '[]'),
-      featuredImage: item.featured_image,
-      status: item.status,
-      createdAt: item.created_at
-    }));
+    const content = contentResult.rows.map(item => {
+      try {
+        // Parse the generated_content JSON field
+        const contentData = item.generated_content ? JSON.parse(item.generated_content) : {};
+        
+        return {
+          id: item.id,
+          title: item.title,
+          originalTitle: item.original_title,
+          content: contentData.content || '',
+          contentType: contentData.contentType || 'blog-post',
+          wordCount: contentData.wordCount || 0,
+          tone: contentData.tone || 'conversational',
+          keywords: contentData.keywords || [],
+          featuredImage: contentData.featuredImage || null,
+          status: item.status,
+          createdAt: item.created_at
+        };
+      } catch (parseError) {
+        logger.error('Error parsing generated_content for item:', item.id, parseError);
+        // Return basic data if JSON parsing fails
+        return {
+          id: item.id,
+          title: item.title,
+          originalTitle: item.original_title,
+          content: '',
+          contentType: 'blog-post',
+          wordCount: 0,
+          tone: 'conversational',
+          keywords: [],
+          featuredImage: null,
+          status: item.status,
+          createdAt: item.created_at
+        };
+      }
+    });
 
     res.json({
       success: true,
