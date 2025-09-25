@@ -588,9 +588,8 @@ router.get('/campaign/:campaignId', authenticateToken, async (req, res) => {
 
     // Get all content for the campaign
     const contentResult = await query(
-      `SELECT cq.*, tq.title as original_title
+      `SELECT cq.*, cq.title as original_title
        FROM content_queue cq
-       LEFT JOIN title_queue tq ON cq.title_id = tq.id
        WHERE cq.campaign_id = $1
        ORDER BY cq.created_at DESC`,
       [campaignId]
