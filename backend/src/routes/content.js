@@ -163,6 +163,52 @@ router.post('/generate', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/content/test-db
+ * Test database connection and content_queue table
+ */
+router.get('/test-db', authenticateToken, async (req, res) => {
+  try {
+    // Check if content_queue table exists
+    const tableCheck = await query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'content_queue'
+      );
+    `);
+    
+    if (!tableCheck.rows[0].exists) {
+      return res.status(500).json({
+        error: 'Database error',
+        message: 'content_queue table does not exist'
+      });
+    }
+    
+    // Check table structure
+    const structure = await query(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns 
+      WHERE table_name = 'content_queue'
+      ORDER BY ordinal_position;
+    `);
+    
+    res.json({
+      success: true,
+      message: 'Database connection successful',
+      tableExists: tableCheck.rows[0].exists,
+      tableStructure: structure.rows
+    });
+    
+  } catch (error) {
+    logger.error('Database test error:', error);
+    res.status(500).json({
+      error: 'Database test failed',
+      message: error.message
+    });
+  }
+});
+
+/**
  * POST /api/content/bulk-generate
  * Generate content for multiple approved titles
  */
@@ -171,8 +217,11 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     const { campaignId, titleIds, contentType = 'blog-post', wordCount = 1000, tone = 'conversational', includeKeywords = true, includeImages = false } = req.body;
 
+    logger.info('Bulk content generation request:', { userId, campaignId, titleIds, contentType, wordCount, tone });
+
     // Validate input
     if (!campaignId || !titleIds || !Array.isArray(titleIds) || titleIds.length === 0) {
+      logger.error('Validation error in bulk-generate:', { campaignId, titleIds });
       return res.status(400).json({
         error: 'Validation error',
         message: 'campaignId and titleIds (non-empty array) are required'
@@ -243,6 +292,7 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
         }
 
         // Save the generated content to database
+        logger.info(`Saving content to database for title: ${title.title}`);
         const contentResult = await query(
           `INSERT INTO content_queue (campaign_id, title_id, title, content, content_type, word_count, tone, keywords, featured_image, status)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'generated')
@@ -250,6 +300,7 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
           [campaignId, title.id, title.title, blogPost.content, contentType, wordCount, tone, JSON.stringify(keywords), featuredImage ? JSON.stringify(featuredImage) : null]
         );
 
+        logger.info(`Content saved successfully for title: ${title.title}`);
         return contentResult.rows[0];
       } catch (error) {
         logger.error(`Error generating content for title ${title.id}:`, error);
