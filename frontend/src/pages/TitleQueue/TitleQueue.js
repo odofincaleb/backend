@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import styled from 'styled-components';
-import { ArrowLeft, Plus, Trash2, Check, X, Loader, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Check, X, Loader, RefreshCw, CheckSquare, Square, FileText } from 'lucide-react';
 import { Button, Input, Label, FormGroup } from '../../styles/GlobalStyles';
 import { Link, useParams } from 'react-router-dom';
 // import { useAuth } from '../../contexts/AuthContext';
@@ -100,6 +100,17 @@ const TitleItem = styled.div`
   }
 `;
 
+const TitleCheckbox = styled.div`
+  display: flex;
+  align-items: center;
+  
+  input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+  }
+`;
+
 const TitleText = styled.div`
   flex: 1;
   font-size: 1.1rem;
@@ -192,6 +203,9 @@ const TitleQueue = () => {
   const [titles, setTitles] = useState([]);
   const [newTitle, setNewTitle] = useState('');
   const [addingTitle, setAddingTitle] = useState(false);
+  const [selectedTitles, setSelectedTitles] = useState(new Set());
+  const [bulkApproving, setBulkApproving] = useState(false);
+  const [generatingContent, setGeneratingContent] = useState(false);
 
   const fetchCampaign = useCallback(async () => {
     try {
@@ -275,6 +289,89 @@ const TitleQueue = () => {
     }
   };
 
+  const toggleTitleSelection = (titleId) => {
+    const newSelected = new Set(selectedTitles);
+    if (newSelected.has(titleId)) {
+      newSelected.delete(titleId);
+    } else {
+      newSelected.add(titleId);
+    }
+    setSelectedTitles(newSelected);
+  };
+
+  const selectAllTitles = () => {
+    const pendingTitles = titles.filter(t => t.status === 'pending');
+    setSelectedTitles(new Set(pendingTitles.map(t => t.id)));
+  };
+
+  const clearSelection = () => {
+    setSelectedTitles(new Set());
+  };
+
+  const bulkApproveTitles = async () => {
+    if (selectedTitles.size === 0) {
+      toast.error('Please select titles to approve');
+      return;
+    }
+
+    try {
+      setBulkApproving(true);
+      const promises = Array.from(selectedTitles).map(titleId => 
+        api.put(`/title-queue/${titleId}/status`, { status: 'approved' })
+      );
+      
+      await Promise.all(promises);
+      toast.success(`Approved ${selectedTitles.size} titles successfully`);
+      setSelectedTitles(new Set());
+      fetchTitles();
+    } catch (error) {
+      console.error('Error bulk approving titles:', error);
+      toast.error('Failed to approve some titles');
+    } finally {
+      setBulkApproving(false);
+    }
+  };
+
+  const generateContentForApprovedTitles = async () => {
+    const approvedTitles = titles.filter(t => t.status === 'approved');
+    if (approvedTitles.length === 0) {
+      toast.error('No approved titles to generate content for');
+      return;
+    }
+
+    if (!window.confirm(`Generate content for ${approvedTitles.length} approved titles?`)) {
+      return;
+    }
+
+    try {
+      setGeneratingContent(true);
+      
+      // Generate content for each approved title
+      const promises = approvedTitles.map(title => 
+        api.post('/content/generate', {
+          campaignId,
+          titleId: title.id,
+          contentType: 'blog-post',
+          wordCount: 1000,
+          tone: campaign?.toneOfVoice || 'conversational',
+          includeKeywords: true,
+          includeImages: false
+        })
+      );
+
+      await Promise.all(promises);
+      toast.success(`Generated content for ${approvedTitles.length} titles`);
+      
+      // Navigate to content generation page
+      window.location.href = `/content/${campaignId}`;
+    } catch (error) {
+      console.error('Error generating content:', error);
+      toast.error('Failed to generate content for some titles');
+    } finally {
+      setGeneratingContent(false);
+    }
+  };
+
   useEffect(() => {
     if (campaignId) {
       fetchCampaign();
@@ -328,6 +425,59 @@ const TitleQueue = () => {
             </>
           )}
         </GenerateButton>
+        
+        {titles.length > 0 && (
+          <>
+            <Button
+              onClick={selectAllTitles}
+              variant="outline"
+              disabled={titles.filter(t => t.status === 'pending').length === 0}
+            >
+              <CheckSquare size={16} />
+              Select All Pending
+            </Button>
+            
+            {selectedTitles.size > 0 && (
+              <Button
+                onClick={bulkApproveTitles}
+                disabled={bulkApproving}
+                variant="success"
+              >
+                {bulkApproving ? (
+                  <>
+                    <Loader className="animate-spin" size={16} />
+                    Approving...
+                  </>
+                ) : (
+                  <>
+                    <Check size={16} />
+                    Approve Selected ({selectedTitles.size})
+                  </>
+                )}
+              </Button>
+            )}
+            
+            {titles.filter(t => t.status === 'approved').length > 0 && (
+              <Button
+                onClick={generateContentForApprovedTitles}
+                disabled={generatingContent}
+                variant="primary"
+              >
+                {generatingContent ? (
+                  <>
+                    <Loader className="animate-spin" size={16} />
+                    Generating Content...
+                  </>
+                ) : (
+                  <>
+                    <FileText size={16} />
+                    Generate Content ({titles.filter(t => t.status === 'approved').length} approved)
+                  </>
+                )}
+              </Button>
+            )}
+          </>
+        )}
       </Actions>
 
       <AddTitleForm onSubmit={addTitle}>
@@ -368,6 +518,15 @@ const TitleQueue = () => {
         <TitlesList>
           {titles.map((title) => (
             <TitleItem key={title.id}>
+              {title.status === 'pending' && (
+                <TitleCheckbox>
+                  <input
+                    type="checkbox"
+                    checked={selectedTitles.has(title.id)}
+                    onChange={() => toggleTitleSelection(title.id)}
+                  />
+                </TitleCheckbox>
+              )}
               <TitleText>{title.title}</TitleText>
               <TitleStatus status={title.status}>
                 {title.status}
