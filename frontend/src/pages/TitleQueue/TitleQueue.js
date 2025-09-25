@@ -5,7 +5,7 @@ import { Button, Input, Label, FormGroup } from '../../styles/GlobalStyles';
 import { Link, useParams } from 'react-router-dom';
 // import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import api from '../../services/api';
+import api, { titleQueueAPI } from '../../services/api';
 
 const TitleQueueContainer = styled.div`
   max-width: 1200px;
@@ -316,11 +316,9 @@ const TitleQueue = () => {
 
     try {
       setBulkApproving(true);
-      const promises = Array.from(selectedTitles).map(titleId => 
-        api.put(`/title-queue/${titleId}/status`, { status: 'approved' })
-      );
+      const titleIds = Array.from(selectedTitles);
+      await titleQueueAPI.bulkUpdateStatus(titleIds, 'approved');
       
-      await Promise.all(promises);
       toast.success(`Approved ${selectedTitles.size} titles successfully`);
       setSelectedTitles(new Set());
       fetchTitles();

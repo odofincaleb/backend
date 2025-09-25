@@ -236,6 +236,12 @@ export const titleQueueAPI = {
     data: { status }
   }),
   
+  bulkUpdateStatus: (titleIds, status) => retryRequest({
+    method: 'PUT',
+    url: '/title-queue/bulk-status',
+    data: { titleIds, status }
+  }),
+  
   delete: (id) => retryRequest({
     method: 'DELETE',
     url: `/title-queue/${id}`

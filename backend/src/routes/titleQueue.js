@@ -197,6 +197,84 @@ router.put('/:titleId/status', authenticateToken, async (req, res) => {
 });
 
 /**
+ * PUT /api/title-queue/bulk-status
+ * Bulk update title statuses (approve/reject multiple titles)
+ */
+router.put('/bulk-status', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { titleIds, status } = req.body;
+
+    // Validate input
+    if (!titleIds || !Array.isArray(titleIds) || titleIds.length === 0) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: 'titleIds must be a non-empty array'
+      });
+    }
+
+    if (!status || !['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: 'Status must be approved or rejected'
+      });
+    }
+
+    // Verify all titles belong to user's campaigns
+    const titleResult = await query(
+      `SELECT tq.id, tq.title, tq.campaign_id, c.user_id
+       FROM title_queue tq
+       JOIN campaigns c ON tq.campaign_id = c.id
+       WHERE tq.id = ANY($1) AND c.user_id = $2`,
+      [titleIds, userId]
+    );
+
+    if (titleResult.rows.length !== titleIds.length) {
+      return res.status(404).json({
+        error: 'Some titles not found',
+        message: 'One or more titles do not exist or do not belong to you'
+      });
+    }
+
+    // Update all titles
+    const updateResult = await query(
+      `UPDATE title_queue 
+       SET status = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ANY($2)
+       RETURNING id, title, status, updated_at`,
+      [status, titleIds]
+    );
+
+    const updatedTitles = updateResult.rows;
+
+    // Log the event for each title
+    const logPromises = updatedTitles.map(title => 
+      query(
+        `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
+         VALUES ($1, $2, 'title_${status}', 'Title ${status}: "${title.title}"', 'info')`,
+        [userId, title.campaign_id]
+      )
+    );
+
+    await Promise.all(logPromises);
+
+    logger.info('Bulk title status updated:', { userId, titleIds, status, count: updatedTitles.length });
+
+    res.json({
+      message: `${updatedTitles.length} titles ${status} successfully`,
+      titles: updatedTitles
+    });
+
+  } catch (error) {
+    logger.error('Bulk update title status error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to update title statuses'
+    });
+  }
+});
+
+/**
  * DELETE /api/title-queue/:titleId
  * Delete a title from the queue
  */
