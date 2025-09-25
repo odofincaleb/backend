@@ -163,6 +163,141 @@ router.post('/generate', authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/content/test-db-public
+ * Test database connection and content_queue table (no auth required)
+ */
+router.get('/test-db-public', async (req, res) => {
+  try {
+    logger.info('=== DATABASE TEST START ===');
+    
+    // Check if content_queue table exists
+    const tableCheck = await query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'content_queue'
+      );
+    `);
+    
+    logger.info('Table exists check:', tableCheck.rows[0]);
+    
+    if (!tableCheck.rows[0].exists) {
+      logger.info('content_queue table does not exist, attempting to create it...');
+      
+      await query(`
+        CREATE TABLE content_queue (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+          title_id UUID NOT NULL REFERENCES title_queue(id) ON DELETE CASCADE,
+          title VARCHAR(500) NOT NULL,
+          content TEXT NOT NULL,
+          content_type VARCHAR(100) NOT NULL DEFAULT 'blog-post',
+          word_count INTEGER NOT NULL DEFAULT 0,
+          tone VARCHAR(50) NOT NULL DEFAULT 'conversational',
+          keywords JSONB DEFAULT '[]'::jsonb,
+          featured_image JSONB DEFAULT NULL,
+          status VARCHAR(50) NOT NULL DEFAULT 'generated',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `);
+      
+      // Create indexes
+      await query(`
+        CREATE INDEX idx_content_queue_campaign_id ON content_queue(campaign_id);
+        CREATE INDEX idx_content_queue_title_id ON content_queue(title_id);
+        CREATE INDEX idx_content_queue_status ON content_queue(status);
+        CREATE INDEX idx_content_queue_created_at ON content_queue(created_at);
+      `);
+      
+      logger.info('content_queue table created successfully');
+    }
+    
+    // Check table structure
+    const structure = await query(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns 
+      WHERE table_name = 'content_queue'
+      ORDER BY ordinal_position;
+    `);
+    
+    logger.info('=== DATABASE TEST SUCCESS ===');
+    res.json({
+      success: true,
+      message: 'Database connection successful',
+      tableExists: true,
+      tableStructure: structure.rows
+    });
+    
+  } catch (error) {
+    logger.error('=== DATABASE TEST ERROR ===');
+    logger.error('Database test error:', error);
+    logger.error('Error stack:', error.stack);
+    res.status(500).json({
+      error: 'Database test failed',
+      message: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+/**
+ * GET /api/content/test-generator
+ * Test content generator service (no auth required)
+ */
+router.get('/test-generator', async (req, res) => {
+  try {
+    logger.info('=== CONTENT GENERATOR TEST START ===');
+    
+    // Test if contentGenerator module can be loaded
+    const contentGenerator = require('../services/contentGenerator');
+    logger.info('Content generator module loaded successfully');
+    
+    // Test OpenAI API key
+    const hasApiKey = !!process.env.OPENAI_API_KEY;
+    logger.info('OpenAI API key present:', hasApiKey);
+    
+    if (!hasApiKey) {
+      return res.status(500).json({
+        error: 'OpenAI API key not configured',
+        message: 'OPENAI_API_KEY environment variable is not set'
+      });
+    }
+    
+    // Test a simple OpenAI call
+    logger.info('Testing OpenAI API connection...');
+    const testResult = await contentGenerator.generateBlogPost({
+      id: 'test',
+      topic: 'Test Topic',
+      context: 'Test Context'
+    }, {
+      contentType: 'blog-post',
+      wordCount: 100,
+      tone: 'conversational'
+    });
+    
+    logger.info('OpenAI API test successful:', { contentLength: testResult.content.length });
+    
+    res.json({
+      success: true,
+      message: 'Content generator test successful',
+      hasApiKey,
+      testContentLength: testResult.content.length
+    });
+    
+  } catch (error) {
+    logger.error('=== CONTENT GENERATOR TEST ERROR ===');
+    logger.error('Content generator test error:', error);
+    logger.error('Error stack:', error.stack);
+    res.status(500).json({
+      error: 'Content generator test failed',
+      message: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+/**
  * GET /api/content/test-db
  * Test database connection and content_queue table
  */
