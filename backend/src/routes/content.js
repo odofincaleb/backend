@@ -39,7 +39,7 @@ router.post('/generate', authenticateToken, async (req, res) => {
       });
     }
 
-    const { campaignId, titleId, contentType, wordCount, tone, includeKeywords, includeImages } = value;
+    const { campaignId, titleId, contentType, wordCount, tone, includeKeywords, includeImages = false } = value;
 
     // Verify campaign belongs to user
     const campaignResult = await query(
@@ -92,9 +92,9 @@ router.post('/generate', authenticateToken, async (req, res) => {
       keywords = await contentGenerator.generateKeywords(campaign.topic, blogPost.content);
     }
 
-    // Generate featured image if requested
+    // Generate featured image if requested (DISABLED to prevent unnecessary API calls)
     let featuredImage = null;
-    if (includeImages) {
+    if (includeImages && false) { // Force disabled to prevent costs
       const imagePrompt = `${campaign.topic}: ${title.title}`;
       featuredImage = await contentGenerator.generateFeaturedImage(imagePrompt);
     }
@@ -460,9 +460,9 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
           keywords = await contentGenerator.generateKeywords(campaign.topic, blogPost.content);
         }
 
-        // Generate featured image if requested
+        // Generate featured image if requested (DISABLED to prevent unnecessary API calls)
         let featuredImage = null;
-        if (includeImages) {
+        if (includeImages && false) { // Force disabled to prevent costs
           const imagePrompt = `${campaign.topic}: ${title.title}`;
           featuredImage = await contentGenerator.generateFeaturedImage(imagePrompt);
         }

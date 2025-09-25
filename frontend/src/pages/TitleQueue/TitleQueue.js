@@ -344,7 +344,7 @@ const TitleQueue = () => {
     try {
       setGeneratingContent(true);
       
-      // Use bulk content generation API
+      // Use bulk content generation API (images disabled to prevent costs)
       const response = await contentAPI.bulkGenerate({
         campaignId,
         titleIds: approvedTitles.map(t => t.id),
@@ -352,7 +352,7 @@ const TitleQueue = () => {
         wordCount: 1000,
         tone: campaign?.toneOfVoice || 'conversational',
         includeKeywords: true,
-        includeImages: false
+        includeImages: false // DISABLED to prevent unnecessary API costs
       });
 
       toast.success(`Generated content for ${response.data.content.length} titles`);
@@ -401,6 +401,18 @@ const TitleQueue = () => {
           <CampaignContext>{campaign.context}</CampaignContext>
         </CampaignInfo>
       )}
+      
+      <div style={{ 
+        background: '#fff3cd', 
+        border: '1px solid #ffeaa7', 
+        borderRadius: '4px', 
+        padding: '12px', 
+        margin: '16px 0',
+        color: '#856404',
+        fontSize: '14px'
+      }}>
+        <strong>⚠️ Image Generation Disabled:</strong> To prevent unnecessary API costs during development, image generation has been temporarily disabled. Content will be generated without featured images.
+      </div>
 
       <Actions>
         <GenerateButton
