@@ -118,7 +118,9 @@ const CreateCampaign = () => {
 
   const fetchWordpressSites = async () => {
     try {
+      console.log('Fetching WordPress sites...');
       const response = await wordpressAPI.getSites();
+      console.log('WordPress sites response:', response.data);
       setWordpressSites(response.data.sites || []);
     } catch (error) {
       toast.error('Failed to fetch WordPress sites');
@@ -214,6 +216,7 @@ const CreateCampaign = () => {
         await campaignsAPI.update(id, campaignData);
         toast.success('Campaign updated successfully');
       } else {
+        console.log('Creating campaign with data:', campaignData);
         await campaignsAPI.create(campaignData);
         toast.success('Campaign created successfully');
       }
