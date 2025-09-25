@@ -107,7 +107,7 @@ export const authAPI = {
   
   getProfile: () => retryRequest({
     method: 'GET',
-    url: '/auth/profile'
+    url: '/auth/me'
   }),
   
   updateProfile: (userData) => retryRequest({
@@ -161,12 +161,12 @@ export const campaignsAPI = {
 export const wordpressAPI = {
   getAll: () => retryRequest({
     method: 'GET',
-    url: '/wordpress'
+    url: '/wordpress/sites'
   }),
   
   getSites: () => retryRequest({
     method: 'GET',
-    url: '/wordpress'
+    url: '/wordpress/sites'
   }),
   
   create: (siteData) => retryRequest({
