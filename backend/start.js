@@ -29,7 +29,9 @@ async function startApplication() {
 
   // Start the server
   console.log('📡 Starting server...');
-  require('./src/server.js');
+  const { startServer } = require('./src/server.js');
+  await startServer();
+  console.log('✅ Server startup completed');
 }
 
 startApplication().catch(error => {
