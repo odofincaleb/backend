@@ -17,6 +17,7 @@ const wordpressRoutes = require('./routes/wordpress');
 const licenseRoutes = require('./routes/license');
 const adminRoutes = require('./routes/admin');
 const titleQueueRoutes = require('./routes/titleQueue');
+const contentRoutes = require('./routes/content');
 
 // Import services
 const campaignScheduler = require('./services/campaignScheduler');
@@ -112,6 +113,7 @@ app.use('/api/wordpress', wordpressRoutes);
 app.use('/api/license', licenseRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/title-queue', titleQueueRoutes);
+app.use('/api/content', contentRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

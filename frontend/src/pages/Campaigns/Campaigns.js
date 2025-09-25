@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { Plus, Target, Play, Pause, Trash2, Edit, Calendar, Globe, FileText } from 'lucide-react';
+import { Plus, Target, Play, Pause, Trash2, Edit, Calendar, Globe, FileText, Edit3 } from 'lucide-react';
 import { Card, Button, Badge } from '../../styles/GlobalStyles';
 import { Link, useNavigate } from 'react-router-dom';
 import { campaignsAPI } from '../../services/api';
@@ -293,6 +293,14 @@ const Campaigns = () => {
                   title="Manage Title Queue"
                 >
                   <FileText size={16} />
+                </Button>
+                <Button 
+                  size="small" 
+                  variant="ghost"
+                  onClick={() => navigate(`/content/${campaign.id}`)}
+                  title="Generate Content"
+                >
+                  <Edit3 size={16} />
                 </Button>
                 <Button 
                   size="small" 

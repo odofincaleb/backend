@@ -192,6 +192,31 @@ export const wordpressAPI = {
   })
 };
 
+// Content API
+export const contentAPI = {
+  generate: (contentData) => retryRequest({
+    method: 'POST',
+    url: '/content/generate',
+    data: contentData
+  }),
+  
+  getByCampaign: (campaignId) => retryRequest({
+    method: 'GET',
+    url: `/content/campaign/${campaignId}`
+  }),
+  
+  updateStatus: (id, status) => retryRequest({
+    method: 'PUT',
+    url: `/content/${id}/status`,
+    data: { status }
+  }),
+  
+  delete: (id) => retryRequest({
+    method: 'DELETE',
+    url: `/content/${id}`
+  })
+};
+
 // Title Queue API
 export const titleQueueAPI = {
   getByCampaign: (campaignId) => retryRequest({
