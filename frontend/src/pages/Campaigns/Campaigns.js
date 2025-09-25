@@ -236,10 +236,11 @@ const Campaigns = () => {
   const formatNextPublish = (dateString) => {
     const date = new Date(dateString);
     const now = new Date();
-    const diffHours = Math.ceil((date - now) / (1000 * 60 * 60));
+    const diffHours = (date - now) / (1000 * 60 * 60);
     
     if (diffHours <= 0) return 'Now';
-    if (diffHours < 24) return `${diffHours}h`;
+    if (diffHours < 1) return `${Math.round(diffHours * 60)}m`; // Show minutes for less than 1 hour
+    if (diffHours < 24) return `${Math.round(diffHours * 10) / 10}h`; // Show decimal hours
     const diffDays = Math.ceil(diffHours / 24);
     return `${diffDays}d`;
   };

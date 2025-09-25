@@ -282,7 +282,9 @@ router.post('/:campaignId/generate', authenticateToken, async (req, res) => {
     const contentGenerator = require('../services/contentGenerator');
     
     // Generate titles
+    logger.info(`Attempting to generate ${count} titles for campaign: ${campaign.topic}`);
     const titles = await contentGenerator.generateTitles(campaign, count);
+    logger.info(`Successfully generated ${titles.length} titles`);
 
     // Add titles to queue
     const titlePromises = titles.map(title => 
@@ -313,10 +315,27 @@ router.post('/:campaignId/generate', authenticateToken, async (req, res) => {
 
   } catch (error) {
     logger.error('Generate titles error:', error);
+    
+    // Check if it's an OpenAI API error
+    if (error.message && error.message.includes('OpenAI API key')) {
+      return res.status(500).json({
+        error: 'Configuration error',
+        message: 'OpenAI API key not configured. Please contact support.'
+      });
+    }
+    
+    // Check if it's an OpenAI API call error
+    if (error.message && error.message.includes('API')) {
+      return res.status(500).json({
+        error: 'AI service error',
+        message: 'Failed to connect to AI service. Please try again later.'
+      });
+    }
+    
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to generate titles',
-      details: error.message
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
