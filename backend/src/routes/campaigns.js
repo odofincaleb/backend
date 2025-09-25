@@ -14,7 +14,7 @@ const createCampaignSchema = Joi.object({
   toneOfVoice: Joi.string().valid('conversational', 'formal', 'humorous', 'storytelling').default('conversational'),
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle').default('pas'),
   imperfectionList: Joi.array().items(Joi.string()).default([]),
-  schedule: Joi.string().valid('24h', '48h', '72h').optional(), // Keep for backward compatibility
+  schedule: Joi.string().pattern(/^\d+(\.\d+)?h$/).optional(), // Accept any decimal hours format like "24.00h", "0.50h", etc.
   scheduleHours: Joi.alternatives().try(
     Joi.number().min(0.1).max(168),
     Joi.string().pattern(/^\d+(\.\d+)?$/).custom((value, helpers) => {
