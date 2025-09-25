@@ -194,8 +194,81 @@ Requirements:
   return prompt;
 }
 
+/**
+ * Generate titles for a campaign
+ */
+async function generateTitles(campaign, count = 5) {
+  try {
+    logger.info('Generating titles with OpenAI', {
+      campaignId: campaign.id,
+      topic: campaign.topic,
+      count
+    });
+
+    const prompt = `Generate ${count} compelling blog post titles for a campaign about "${campaign.topic}".
+
+Context: ${campaign.context}
+
+Requirements:
+- Each title should be engaging and click-worthy
+- Titles should be SEO-friendly
+- Vary the style (how-to, listicle, question-based, etc.)
+- Keep titles between 50-70 characters
+- Make them specific to the topic and context
+- Avoid generic or vague titles
+
+Return only the titles, one per line, without numbering or bullet points.`;
+
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert content strategist specializing in creating compelling, SEO-optimized blog post titles that drive engagement and clicks.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      max_tokens: 500,
+      temperature: 0.8,
+      presence_penalty: 0.2,
+      frequency_penalty: 0.1
+    });
+
+    const titlesText = response.choices[0].message.content.trim();
+    const titles = titlesText.split('\n')
+      .map(title => title.trim())
+      .filter(title => title.length > 0 && title.length <= 100)
+      .slice(0, count); // Ensure we don't exceed the requested count
+    
+    logger.info('Titles generated successfully', {
+      campaignId: campaign.id,
+      requestedCount: count,
+      actualCount: titles.length
+    });
+    
+    return titles;
+
+  } catch (error) {
+    logger.error('Error generating titles:', error);
+    
+    if (error.code === 'insufficient_quota') {
+      throw new Error('OpenAI API quota exceeded. Please check your billing.');
+    }
+    
+    if (error.code === 'invalid_api_key') {
+      throw new Error('OpenAI API key not configured. Please contact support.');
+    }
+    
+    throw new Error(`Failed to generate titles: ${error.message}`);
+  }
+}
+
 module.exports = {
   generateBlogPost,
   generateKeywords,
-  generateFeaturedImage
+  generateFeaturedImage,
+  generateTitles
 };
