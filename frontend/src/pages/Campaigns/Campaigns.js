@@ -198,7 +198,7 @@ const Campaigns = () => {
 
     try {
       setActionLoading(prev => ({ ...prev, [campaignId]: true }));
-      await campaignsAPI.deleteCampaign(campaignId);
+      await campaignsAPI.delete(campaignId);
       
       setCampaigns(prev => prev.filter(campaign => campaign.id !== campaignId));
       toast.success('Campaign deleted successfully');
