@@ -554,15 +554,15 @@ router.delete('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Delete campaign (content_queue will be deleted via CASCADE)
-    await query('DELETE FROM campaigns WHERE id = $1', [campaignId]);
-
-    // Log campaign deletion
+    // Log campaign deletion BEFORE deleting the campaign
     await query(
       `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
        VALUES ($1, $2, 'campaign_deleted', 'Campaign deleted', 'info')`,
       [userId, campaignId]
     );
+
+    // Delete campaign (related records will be deleted via CASCADE)
+    await query('DELETE FROM campaigns WHERE id = $1', [campaignId]);
 
     logger.info('Campaign deleted:', { userId, campaignId });
 
@@ -572,9 +572,27 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
   } catch (error) {
     logger.error('Delete campaign error:', error);
+    
+    // Check for specific database constraint errors
+    if (error.code === '23503') {
+      return res.status(400).json({
+        error: 'Cannot delete campaign',
+        message: 'Campaign has related records that prevent deletion. Please contact support.'
+      });
+    }
+    
+    // Check for foreign key constraint errors
+    if (error.message && error.message.includes('foreign key')) {
+      return res.status(400).json({
+        error: 'Database constraint error',
+        message: 'Cannot delete campaign due to related records. Please contact support.'
+      });
+    }
+    
     res.status(500).json({
       error: 'Internal server error',
-      message: 'Failed to delete campaign'
+      message: 'Failed to delete campaign',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
