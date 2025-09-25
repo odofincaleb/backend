@@ -101,10 +101,10 @@ router.post('/generate', authenticateToken, async (req, res) => {
 
     // Save the generated content to database
     const contentResult = await query(
-      `INSERT INTO content_queue (campaign_id, title_id, title, content, content_type, word_count, tone, keywords, featured_image, status, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'generated', NOW())
+      `INSERT INTO content_queue (campaign_id, title_id, title, content, content_type, word_count, tone, keywords, featured_image, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'generated')
        RETURNING id, title, content, content_type, word_count, tone, keywords, featured_image, status, created_at`,
-      [campaignId, titleId, title.title, blogPost.content, contentType, wordCount, tone, JSON.stringify(keywords), featuredImage]
+      [campaignId, titleId, title.title, blogPost.content, contentType, wordCount, tone, JSON.stringify(keywords), featuredImage ? JSON.stringify(featuredImage) : null]
     );
 
     const generatedContent = contentResult.rows[0];
@@ -137,6 +137,153 @@ router.post('/generate', authenticateToken, async (req, res) => {
 
   } catch (error) {
     logger.error('Generate content error:', error);
+    
+    // Check if it's an OpenAI API error
+    if (error.message && error.message.includes('OpenAI API key')) {
+      return res.status(500).json({
+        error: 'Configuration error',
+        message: 'OpenAI API key not configured. Please contact support.'
+      });
+    }
+    
+    // Check if it's an OpenAI API call error
+    if (error.message && error.message.includes('API')) {
+      return res.status(500).json({
+        error: 'AI service error',
+        message: 'Failed to connect to AI service. Please try again later.'
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to generate content',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * POST /api/content/bulk-generate
+ * Generate content for multiple approved titles
+ */
+router.post('/bulk-generate', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { campaignId, titleIds, contentType = 'blog-post', wordCount = 1000, tone = 'conversational', includeKeywords = true, includeImages = false } = req.body;
+
+    // Validate input
+    if (!campaignId || !titleIds || !Array.isArray(titleIds) || titleIds.length === 0) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: 'campaignId and titleIds (non-empty array) are required'
+      });
+    }
+
+    // Verify campaign belongs to user
+    const campaignResult = await query(
+      `SELECT c.*, ws.site_name, ws.site_url, ws.username, ws.password
+       FROM campaigns c
+       LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
+       WHERE c.id = $1 AND c.user_id = $2`,
+      [campaignId, userId]
+    );
+
+    if (campaignResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Campaign not found',
+        message: 'The specified campaign does not exist or does not belong to you'
+      });
+    }
+
+    // Verify all titles belong to user's campaign and are approved
+    const titleResult = await query(
+      `SELECT tq.id, tq.title, tq.campaign_id, c.user_id
+       FROM title_queue tq
+       JOIN campaigns c ON tq.campaign_id = c.id
+       WHERE tq.id = ANY($1) AND c.user_id = $2 AND tq.status = 'approved'`,
+      [titleIds, userId]
+    );
+
+    if (titleResult.rows.length !== titleIds.length) {
+      return res.status(404).json({
+        error: 'Some titles not found or not approved',
+        message: 'One or more titles do not exist, do not belong to you, or are not approved'
+      });
+    }
+
+    const campaign = campaignResult.rows[0];
+    const titles = titleResult.rows;
+
+    logger.info(`Bulk generating content for ${titles.length} titles in campaign: ${campaign.topic}`);
+
+    // Generate content for each title
+    const contentPromises = titles.map(async (title) => {
+      try {
+        const contentOptions = {
+          contentType,
+          wordCount,
+          tone,
+          includeKeywords,
+          includeImages
+        };
+
+        const blogPost = await contentGenerator.generateBlogPost(campaign, contentOptions);
+        
+        // Generate keywords if requested
+        let keywords = [];
+        if (includeKeywords) {
+          keywords = await contentGenerator.generateKeywords(campaign.topic, blogPost.content);
+        }
+
+        // Generate featured image if requested
+        let featuredImage = null;
+        if (includeImages) {
+          const imagePrompt = `${campaign.topic}: ${title.title}`;
+          featuredImage = await contentGenerator.generateFeaturedImage(imagePrompt);
+        }
+
+        // Save the generated content to database
+        const contentResult = await query(
+          `INSERT INTO content_queue (campaign_id, title_id, title, content, content_type, word_count, tone, keywords, featured_image, status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'generated')
+           RETURNING id, title, content, content_type, word_count, tone, keywords, featured_image, status, created_at`,
+          [campaignId, title.id, title.title, blogPost.content, contentType, wordCount, tone, JSON.stringify(keywords), featuredImage ? JSON.stringify(featuredImage) : null]
+        );
+
+        return contentResult.rows[0];
+      } catch (error) {
+        logger.error(`Error generating content for title ${title.id}:`, error);
+        return { error: error.message, titleId: title.id };
+      }
+    });
+
+    const results = await Promise.all(contentPromises);
+    const successfulContent = results.filter(result => !result.error);
+    const failedContent = results.filter(result => result.error);
+
+    // Log the event
+    await query(
+      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
+       VALUES ($1, $2, 'content_bulk_generated', 'Generated content for ${successfulContent.length} titles', 'info')`,
+      [userId, campaignId]
+    );
+
+    logger.info('Bulk content generation completed:', { 
+      userId, 
+      campaignId, 
+      successful: successfulContent.length, 
+      failed: failedContent.length 
+    });
+
+    res.json({
+      success: true,
+      message: `Generated content for ${successfulContent.length} titles successfully`,
+      content: successfulContent,
+      errors: failedContent.length > 0 ? failedContent : undefined
+    });
+
+  } catch (error) {
+    logger.error('Bulk generate content error:', error);
     
     // Check if it's an OpenAI API error
     if (error.message && error.message.includes('OpenAI API key')) {

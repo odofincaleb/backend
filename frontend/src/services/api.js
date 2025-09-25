@@ -200,6 +200,12 @@ export const contentAPI = {
     data: contentData
   }),
   
+  bulkGenerate: (bulkData) => retryRequest({
+    method: 'POST',
+    url: '/content/bulk-generate',
+    data: bulkData
+  }),
+  
   getByCampaign: (campaignId) => retryRequest({
     method: 'GET',
     url: `/content/campaign/${campaignId}`

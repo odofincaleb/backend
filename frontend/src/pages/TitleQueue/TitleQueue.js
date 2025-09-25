@@ -5,7 +5,7 @@ import { Button, Input, Label, FormGroup } from '../../styles/GlobalStyles';
 import { Link, useParams } from 'react-router-dom';
 // import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
-import api, { titleQueueAPI } from '../../services/api';
+import api, { titleQueueAPI, contentAPI } from '../../services/api';
 
 const TitleQueueContainer = styled.div`
   max-width: 1200px;
@@ -344,21 +344,18 @@ const TitleQueue = () => {
     try {
       setGeneratingContent(true);
       
-      // Generate content for each approved title
-      const promises = approvedTitles.map(title => 
-        api.post('/content/generate', {
-          campaignId,
-          titleId: title.id,
-          contentType: 'blog-post',
-          wordCount: 1000,
-          tone: campaign?.toneOfVoice || 'conversational',
-          includeKeywords: true,
-          includeImages: false
-        })
-      );
+      // Use bulk content generation API
+      const response = await contentAPI.bulkGenerate({
+        campaignId,
+        titleIds: approvedTitles.map(t => t.id),
+        contentType: 'blog-post',
+        wordCount: 1000,
+        tone: campaign?.toneOfVoice || 'conversational',
+        includeKeywords: true,
+        includeImages: false
+      });
 
-      await Promise.all(promises);
-      toast.success(`Generated content for ${approvedTitles.length} titles`);
+      toast.success(`Generated content for ${response.data.content.length} titles`);
       
       // Navigate to content generation page
       window.location.href = `/content/${campaignId}`;
