@@ -13,7 +13,7 @@ const createCampaignSchema = Joi.object({
   context: Joi.string().min(10).max(2000).required(),
   toneOfVoice: Joi.string().valid('conversational', 'formal', 'humorous', 'storytelling').default('conversational'),
   writingStyle: Joi.string().valid('pas', 'aida', 'listicle').default('pas'),
-  imperfectionList: Joi.array().items(Joi.string()).default([]),
+  imperfectionList: Joi.array().items(Joi.string().min(1)).default([]),
   schedule: Joi.string().pattern(/^\d+(\.\d+)?h$/).optional(), // Accept any decimal hours format like "24.00h", "0.50h", etc.
   scheduleHours: Joi.alternatives().try(
     Joi.number().min(0.1).max(168),
@@ -25,9 +25,13 @@ const createCampaignSchema = Joi.object({
       return num;
     })
   ).optional(), // New custom hours field
-  wordpressSiteId: Joi.string().uuid().optional(),
+  wordpressSiteId: Joi.alternatives().try(
+    Joi.string().uuid(),
+    Joi.string().allow(''),
+    Joi.valid(null)
+  ).optional(),
   contentTypes: Joi.array().items(Joi.string()).max(5).optional(),
-  contentTypeVariables: Joi.object().optional(),
+  contentTypeVariables: Joi.object().allow(null).optional(),
   titleCount: Joi.number().min(1).max(20).default(5),
   numberOfTitles: Joi.number().min(1).max(20).default(5) // Support both field names
 }).custom((value, helpers) => {
