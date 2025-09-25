@@ -210,7 +210,7 @@ const WordPressSites = () => {
     setLoading(true);
 
     try {
-      await wordpressAPI.addSite(formData);
+      await wordpressAPI.create(formData);
       toast.success('WordPress site added successfully!');
       setShowModal(false);
       setFormData({ siteName: '', siteUrl: '', username: '', password: '' });
