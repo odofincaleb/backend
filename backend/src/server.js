@@ -177,11 +177,21 @@ const gracefulShutdown = async (signal) => {
 // Start server
 const startServer = async () => {
   try {
-    // Test database connection
-    const dbConnected = await testConnection();
+    // Test database connection with timeout
+    logger.info('🔄 Testing database connection...');
+    const dbConnected = await Promise.race([
+      testConnection(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Database connection timeout')), 10000)
+      )
+    ]);
+    
     if (!dbConnected) {
+      logger.error('❌ Database connection failed');
       throw new Error('Database connection failed');
     }
+    
+    logger.info('✅ Database connection successful');
 
     const server = app.listen(PORT, () => {
       logger.info(`🚀 Fiddy AutoPublisher API server running on port ${PORT}`);

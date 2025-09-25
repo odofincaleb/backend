@@ -22,13 +22,19 @@ pool.on('error', (err) => {
 // Test database connection
 const testConnection = async () => {
   try {
+    logger.info('🔄 Attempting database connection...');
     const client = await pool.connect();
     const result = await client.query('SELECT NOW()');
     client.release();
-    logger.info('Database connected successfully:', result.rows[0].now);
+    logger.info('✅ Database connected successfully:', result.rows[0].now);
     return true;
   } catch (err) {
-    logger.error('Database connection failed:', err);
+    logger.error('❌ Database connection failed:', err.message);
+    logger.error('Database error details:', {
+      code: err.code,
+      detail: err.detail,
+      hint: err.hint
+    });
     return false;
   }
 };
