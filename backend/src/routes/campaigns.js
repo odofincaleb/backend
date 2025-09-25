@@ -91,6 +91,7 @@ router.get('/content-types', authenticateToken, async (req, res) => {
   try {
     const contentTypes = contentTypeTemplates.getAllContentTypes();
     res.json({
+      success: true,
       contentTypes
     });
   } catch (error) {
@@ -180,6 +181,7 @@ router.get('/', authenticateToken, async (req, res) => {
     }));
 
     res.json({
+      success: true,
       campaigns
     });
 
@@ -218,6 +220,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const campaign = result.rows[0];
 
     res.json({
+      success: true,
       campaign: {
         id: campaign.id,
         topic: campaign.topic,
