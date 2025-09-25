@@ -171,24 +171,24 @@ export const wordpressAPI = {
   
   create: (siteData) => retryRequest({
     method: 'POST',
-    url: '/wordpress',
+    url: '/wordpress/sites',
     data: siteData
   }),
   
   update: (id, siteData) => retryRequest({
     method: 'PUT',
-    url: `/wordpress/${id}`,
+    url: `/wordpress/sites/${id}`,
     data: siteData
   }),
   
   delete: (id) => retryRequest({
     method: 'DELETE',
-    url: `/wordpress/${id}`
+    url: `/wordpress/sites/${id}`
   }),
   
   testConnection: (id) => retryRequest({
     method: 'POST',
-    url: `/wordpress/${id}/test`
+    url: `/wordpress/sites/${id}/test`
   })
 };
 
