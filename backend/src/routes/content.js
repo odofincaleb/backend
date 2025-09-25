@@ -101,10 +101,17 @@ router.post('/generate', authenticateToken, async (req, res) => {
 
     // Save the generated content to database
     const contentResult = await query(
-      `INSERT INTO content_queue (campaign_id, title_id, title, content, content_type, word_count, tone, keywords, featured_image, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'generated')
-       RETURNING id, title, content, content_type, word_count, tone, keywords, featured_image, status, created_at`,
-      [campaignId, titleId, title.title, blogPost.content, contentType, wordCount, tone, JSON.stringify(keywords), featuredImage ? JSON.stringify(featuredImage) : null]
+      `INSERT INTO content_queue (campaign_id, title, generated_content, status)
+       VALUES ($1, $2, $3, 'generated')
+       RETURNING id, title, generated_content, status, created_at`,
+      [campaignId, title.title, JSON.stringify({
+        content: blogPost.content,
+        contentType,
+        wordCount,
+        tone,
+        keywords,
+        featuredImage
+      })]
     );
 
     const generatedContent = contentResult.rows[0];
@@ -118,18 +125,20 @@ router.post('/generate', authenticateToken, async (req, res) => {
 
     logger.info('Content generated successfully:', { userId, campaignId, titleId });
 
+    const contentData = JSON.parse(generatedContent.generated_content);
+    
     res.json({
       success: true,
       message: 'Content generated successfully',
       content: {
         id: generatedContent.id,
         title: generatedContent.title,
-        content: generatedContent.content,
-        contentType: generatedContent.content_type,
-        wordCount: generatedContent.word_count,
-        tone: generatedContent.tone,
-        keywords: JSON.parse(generatedContent.keywords || '[]'),
-        featuredImage: generatedContent.featured_image,
+        content: contentData.content,
+        contentType: contentData.contentType,
+        wordCount: contentData.wordCount,
+        tone: contentData.tone,
+        keywords: contentData.keywords || [],
+        featuredImage: contentData.featuredImage,
         status: generatedContent.status,
         createdAt: generatedContent.created_at
       }
@@ -462,10 +471,17 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
         logger.info(`Saving content to database for title: ${title.title}`);
         try {
           const contentResult = await query(
-            `INSERT INTO content_queue (campaign_id, title_id, title, content, content_type, word_count, tone, keywords, featured_image, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'generated')
-             RETURNING id, title, content, content_type, word_count, tone, keywords, featured_image, status, created_at`,
-            [campaignId, title.id, title.title, blogPost.content, contentType, wordCount, tone, JSON.stringify(keywords), featuredImage ? JSON.stringify(featuredImage) : null]
+            `INSERT INTO content_queue (campaign_id, title, generated_content, status)
+             VALUES ($1, $2, $3, 'generated')
+             RETURNING id, title, generated_content, status, created_at`,
+            [campaignId, title.title, JSON.stringify({
+              content: blogPost.content,
+              contentType,
+              wordCount,
+              tone,
+              keywords,
+              featuredImage
+            })]
           );
           logger.info(`Content saved successfully for title: ${title.title}`);
         } catch (dbError) {
