@@ -5,9 +5,11 @@ const logger = require('../utils/logger');
 const dbConfig = {
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+  max: 10, // Reduced from 20 to prevent resource exhaustion
+  idleTimeoutMillis: 10000, // Reduced from 30 seconds
+  connectionTimeoutMillis: 5000, // Increased from 2 seconds
+  query_timeout: 10000, // 10 second query timeout
+  statement_timeout: 10000, // 10 second statement timeout
 };
 
 // Create connection pool
