@@ -178,10 +178,36 @@ router.get('/test-db', authenticateToken, async (req, res) => {
     `);
     
     if (!tableCheck.rows[0].exists) {
-      return res.status(500).json({
-        error: 'Database error',
-        message: 'content_queue table does not exist'
-      });
+      // Try to create the table
+      logger.info('content_queue table does not exist, attempting to create it...');
+      
+      await query(`
+        CREATE TABLE content_queue (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+          title_id UUID NOT NULL REFERENCES title_queue(id) ON DELETE CASCADE,
+          title VARCHAR(500) NOT NULL,
+          content TEXT NOT NULL,
+          content_type VARCHAR(100) NOT NULL DEFAULT 'blog-post',
+          word_count INTEGER NOT NULL DEFAULT 0,
+          tone VARCHAR(50) NOT NULL DEFAULT 'conversational',
+          keywords JSONB DEFAULT '[]'::jsonb,
+          featured_image JSONB DEFAULT NULL,
+          status VARCHAR(50) NOT NULL DEFAULT 'generated',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `);
+      
+      // Create indexes
+      await query(`
+        CREATE INDEX idx_content_queue_campaign_id ON content_queue(campaign_id);
+        CREATE INDEX idx_content_queue_title_id ON content_queue(title_id);
+        CREATE INDEX idx_content_queue_status ON content_queue(status);
+        CREATE INDEX idx_content_queue_created_at ON content_queue(created_at);
+      `);
+      
+      logger.info('content_queue table created successfully');
     }
     
     // Check table structure
@@ -195,7 +221,7 @@ router.get('/test-db', authenticateToken, async (req, res) => {
     res.json({
       success: true,
       message: 'Database connection successful',
-      tableExists: tableCheck.rows[0].exists,
+      tableExists: true,
       tableStructure: structure.rows
     });
     
