@@ -43,7 +43,7 @@ router.post('/generate', authenticateToken, async (req, res) => {
 
     // Verify campaign belongs to user
     const campaignResult = await query(
-      `SELECT c.*, ws.site_name, ws.site_url, ws.username, ws.password
+      `SELECT c.*, ws.site_name, ws.site_url, ws.username, ws.password_encrypted
        FROM campaigns c
        LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
        WHERE c.id = $1 AND c.user_id = $2`,
@@ -393,7 +393,7 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
     // Verify campaign belongs to user
     logger.info('Checking campaign ownership...');
     const campaignResult = await query(
-      `SELECT c.*, ws.site_name, ws.site_url, ws.username, ws.password
+      `SELECT c.*, ws.site_name, ws.site_url, ws.username, ws.password_encrypted
        FROM campaigns c
        LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
        WHERE c.id = $1 AND c.user_id = $2`,

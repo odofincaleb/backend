@@ -3,8 +3,8 @@ const logger = require('../utils/logger');
 
 // Initialize OpenAI client
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+        apiKey: process.env.OPENAI_API_KEY
+      });
 
 /**
  * Generate blog post content for a given title and campaign
@@ -32,16 +32,16 @@ async function generateBlogPost(campaign, options = {}) {
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4',
-      messages: [
-        {
+        messages: [
+          {
           role: 'system',
           content: 'You are an expert content writer specializing in creating engaging, SEO-optimized blog posts. Write in a professional yet accessible tone.'
-        },
-        {
+          },
+          {
           role: 'user',
-          content: prompt
-        }
-      ],
+            content: prompt
+          }
+        ],
       max_tokens: Math.min(wordCount * 2, 4000), // Roughly 2 tokens per word
       temperature: 0.7,
       presence_penalty: 0.1,
@@ -61,7 +61,7 @@ async function generateBlogPost(campaign, options = {}) {
       generatedAt: new Date().toISOString()
     };
 
-  } catch (error) {
+    } catch (error) {
     logger.error('Error generating blog post content:', error);
     
     if (error.code === 'insufficient_quota') {
@@ -106,13 +106,13 @@ async function generateKeywords(topic, content) {
     
     return keywords;
 
-  } catch (error) {
+    } catch (error) {
     logger.error('Error generating keywords:', error);
-    return [];
+      return [];
+    }
   }
-}
 
-/**
+  /**
  * Generate featured image description for DALL-E
  */
 async function generateFeaturedImage(imagePrompt) {
@@ -128,20 +128,20 @@ async function generateFeaturedImage(imagePrompt) {
     const imageUrl = response.data[0].url;
     
     logger.info('Featured image generated successfully', { imagePrompt });
-    
-    return {
+
+      return {
       url: imageUrl,
       prompt: imagePrompt,
-      generatedAt: new Date().toISOString()
-    };
+        generatedAt: new Date().toISOString()
+      };
 
-  } catch (error) {
+    } catch (error) {
     logger.error('Error generating featured image:', error);
     return null;
+    }
   }
-}
 
-/**
+  /**
  * Build content generation prompt based on campaign and options
  */
 function buildContentPrompt(campaign, contentType, wordCount, tone) {
@@ -191,10 +191,10 @@ Requirements:
     prompt += '\n\nInclude real examples, data, and specific outcomes.';
   }
 
-  return prompt;
-}
+    return prompt;
+  }
 
-/**
+  /**
  * Generate titles for a campaign
  */
 async function generateTitles(campaign, count = 5) {
@@ -221,8 +221,8 @@ Return only the titles, one per line, without numbering or bullet points.`;
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4',
-      messages: [
-        {
+        messages: [
+          {
           role: 'system',
           content: 'You are an expert content strategist specializing in creating compelling, SEO-optimized blog post titles that drive engagement and clicks.'
         },
@@ -251,7 +251,7 @@ Return only the titles, one per line, without numbering or bullet points.`;
     
     return titles;
 
-  } catch (error) {
+    } catch (error) {
     logger.error('Error generating titles:', error);
     
     if (error.code === 'insufficient_quota') {
