@@ -8,7 +8,7 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
 // Get base URL without /api suffix
-const baseUrl = (process.env.REACT_APP_API_URL || 'https://backend-production-8c02.up.railway.app/api')
+const baseUrl = (process.env.REACT_APP_API_URL || 'https://backend-4wma.onrender.com/api')
   .replace(/\/api\/?$/, '');
 
 // Create a separate axios instance for health checks
