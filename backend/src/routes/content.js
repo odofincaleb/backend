@@ -240,6 +240,7 @@ router.get('/test-db', authenticateToken, async (req, res) => {
  */
 router.post('/bulk-generate', authenticateToken, async (req, res) => {
   try {
+    logger.info('=== BULK CONTENT GENERATION START ===');
     const userId = req.user.id;
     const { campaignId, titleIds, contentType = 'blog-post', wordCount = 1000, tone = 'conversational', includeKeywords = true, includeImages = false } = req.body;
 
@@ -255,6 +256,7 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
     }
 
     // Verify campaign belongs to user
+    logger.info('Checking campaign ownership...');
     const campaignResult = await query(
       `SELECT c.*, ws.site_name, ws.site_url, ws.username, ws.password
        FROM campaigns c
@@ -262,6 +264,7 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
        WHERE c.id = $1 AND c.user_id = $2`,
       [campaignId, userId]
     );
+    logger.info('Campaign query result:', { rowCount: campaignResult.rows.length });
 
     if (campaignResult.rows.length === 0) {
       return res.status(404).json({
@@ -271,6 +274,7 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
     }
 
     // Verify all titles belong to user's campaign and are approved
+    logger.info('Checking title ownership and approval...');
     const titleResult = await query(
       `SELECT tq.id, tq.title, tq.campaign_id, c.user_id
        FROM title_queue tq
@@ -278,6 +282,7 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
        WHERE tq.id = ANY($1) AND c.user_id = $2 AND tq.status = 'approved'`,
       [titleIds, userId]
     );
+    logger.info('Title query result:', { rowCount: titleResult.rows.length, requestedCount: titleIds.length });
 
     if (titleResult.rows.length !== titleIds.length) {
       return res.status(404).json({
@@ -292,6 +297,7 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
     logger.info(`Bulk generating content for ${titles.length} titles in campaign: ${campaign.topic}`);
 
     // Generate content for each title
+    logger.info('Starting content generation loop...');
     const contentPromises = titles.map(async (title) => {
       try {
         const contentOptions = {
@@ -319,14 +325,19 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
 
         // Save the generated content to database
         logger.info(`Saving content to database for title: ${title.title}`);
-        const contentResult = await query(
-          `INSERT INTO content_queue (campaign_id, title_id, title, content, content_type, word_count, tone, keywords, featured_image, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'generated')
-           RETURNING id, title, content, content_type, word_count, tone, keywords, featured_image, status, created_at`,
-          [campaignId, title.id, title.title, blogPost.content, contentType, wordCount, tone, JSON.stringify(keywords), featuredImage ? JSON.stringify(featuredImage) : null]
-        );
+        try {
+          const contentResult = await query(
+            `INSERT INTO content_queue (campaign_id, title_id, title, content, content_type, word_count, tone, keywords, featured_image, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'generated')
+             RETURNING id, title, content, content_type, word_count, tone, keywords, featured_image, status, created_at`,
+            [campaignId, title.id, title.title, blogPost.content, contentType, wordCount, tone, JSON.stringify(keywords), featuredImage ? JSON.stringify(featuredImage) : null]
+          );
+          logger.info(`Content saved successfully for title: ${title.title}`);
+        } catch (dbError) {
+          logger.error(`Database error saving content for title ${title.id}:`, dbError);
+          throw dbError;
+        }
 
-        logger.info(`Content saved successfully for title: ${title.title}`);
         return contentResult.rows[0];
       } catch (error) {
         logger.error(`Error generating content for title ${title.id}:`, error);
@@ -334,11 +345,19 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
       }
     });
 
+    logger.info('Waiting for all content generation promises to complete...');
     const results = await Promise.all(contentPromises);
     const successfulContent = results.filter(result => !result.error);
     const failedContent = results.filter(result => result.error);
 
+    logger.info('Content generation results:', { 
+      successful: successfulContent.length, 
+      failed: failedContent.length,
+      total: results.length 
+    });
+
     // Log the event
+    logger.info('Logging the event to database...');
     await query(
       `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
        VALUES ($1, $2, 'content_bulk_generated', 'Generated content for ${successfulContent.length} titles', 'info')`,
@@ -360,10 +379,15 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
     });
 
   } catch (error) {
+    logger.error('=== BULK CONTENT GENERATION ERROR ===');
     logger.error('Bulk generate content error:', error);
+    logger.error('Error stack:', error.stack);
+    logger.error('Error message:', error.message);
+    logger.error('Error code:', error.code);
     
     // Check if it's an OpenAI API error
     if (error.message && error.message.includes('OpenAI API key')) {
+      logger.error('OpenAI API key error detected');
       return res.status(500).json({
         error: 'Configuration error',
         message: 'OpenAI API key not configured. Please contact support.'
@@ -372,12 +396,14 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
     
     // Check if it's an OpenAI API call error
     if (error.message && error.message.includes('API')) {
+      logger.error('OpenAI API call error detected');
       return res.status(500).json({
         error: 'AI service error',
         message: 'Failed to connect to AI service. Please try again later.'
       });
     }
     
+    logger.error('Generic error, returning 500');
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to generate content',
