@@ -337,50 +337,64 @@ const TitleQueue = () => {
       return;
     }
 
-    if (!window.confirm(`Generate content for ${approvedTitles.length} approved titles? This may take 1-2 minutes.`)) {
+    if (!window.confirm(`Generate content for ${approvedTitles.length} approved titles? This will process them one by one to avoid timeouts.`)) {
       return;
     }
 
     try {
       setGeneratingContent(true);
       
-      // Show progress toast
-      toast.loading(`Generating content for ${approvedTitles.length} titles... This may take 1-2 minutes.`, {
-        duration: 0, // Keep loading toast until we dismiss it
-        id: 'content-generation'
-      });
+      let successCount = 0;
+      let errorCount = 0;
       
-      // Use bulk content generation API (images disabled to prevent costs)
-      const response = await contentAPI.bulkGenerate({
-        campaignId,
-        titleIds: approvedTitles.map(t => t.id),
-        contentType: 'blog-post',
-        wordCount: 1000,
-        tone: campaign?.toneOfVoice || 'conversational',
-        includeKeywords: true,
-        includeImages: false // DISABLED to prevent unnecessary API costs
-      });
-
-      // Dismiss loading toast and show success
-      toast.dismiss('content-generation');
-      toast.success(`Generated content for ${response.data.content.length} titles`);
-      
-      // Navigate to content generation page
-      window.location.href = `/content/${campaignId}`;
-    } catch (error) {
-      console.error('Error generating content:', error);
-      
-      // Dismiss loading toast
-      toast.dismiss('content-generation');
-      
-      // Show specific error messages
-      if (error.code === 'ECONNABORTED') {
-        toast.error('Content generation timed out. Please try again with fewer titles.');
-      } else if (error.response?.status === 500) {
-        toast.error('Server error during content generation. Please try again.');
-      } else {
-        toast.error('Failed to generate content. Please try again.');
+      // Process titles one by one to avoid timeout issues
+      for (let i = 0; i < approvedTitles.length; i++) {
+        const title = approvedTitles[i];
+        
+        try {
+          // Show progress toast
+          toast.loading(`Generating content ${i + 1}/${approvedTitles.length}: ${title.title}`, {
+            duration: 0,
+            id: 'content-generation'
+          });
+          
+          // Generate content for single title
+          const response = await contentAPI.generate({
+            campaignId,
+            titleId: title.id,
+            contentType: 'blog-post',
+            wordCount: 1000,
+            tone: campaign?.toneOfVoice || 'conversational',
+            includeKeywords: true,
+            includeImages: false
+          });
+          
+          successCount++;
+          console.log(`Successfully generated content for title ${i + 1}/${approvedTitles.length}`);
+          
+        } catch (titleError) {
+          console.error(`Error generating content for title ${i + 1}:`, titleError);
+          errorCount++;
+        }
       }
+
+      // Dismiss loading toast and show results
+      toast.dismiss('content-generation');
+      
+      if (successCount > 0) {
+        toast.success(`Generated content for ${successCount} titles successfully`);
+        // Navigate to content generation page
+        window.location.href = `/content/${campaignId}`;
+      }
+      
+      if (errorCount > 0) {
+        toast.error(`Failed to generate content for ${errorCount} titles`);
+      }
+      
+    } catch (error) {
+      console.error('Error in content generation process:', error);
+      toast.dismiss('content-generation');
+      toast.error('Failed to generate content. Please try again.');
     } finally {
       setGeneratingContent(false);
     }

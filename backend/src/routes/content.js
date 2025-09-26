@@ -440,7 +440,7 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
 
     logger.info(`Bulk generating content for ${titles.length} titles in campaign: ${campaign.topic}`);
 
-    // Generate content for each title
+    // Generate content for each title (simplified approach)
     logger.info(`Starting content generation for ${titles.length} titles...`);
     const contentPromises = titles.map(async (title, index) => {
       try {
