@@ -594,7 +594,19 @@ router.get('/campaign/:campaignId', authenticateToken, async (req, res) => {
         }
 
         // Parse the generated_content JSON field
+        logger.info(`Parsing generated_content for item ${item.id}:`, {
+          contentLength: item.generated_content ? item.generated_content.length : 0,
+          contentPreview: item.generated_content ? item.generated_content.substring(0, 100) : 'null'
+        });
+        
         const contentData = JSON.parse(item.generated_content);
+        
+        logger.info(`Parsed content data for item ${item.id}:`, {
+          hasContent: !!contentData.content,
+          contentLength: contentData.content ? contentData.content.length : 0,
+          wordCount: contentData.wordCount || 0,
+          contentType: contentData.contentType
+        });
         
         return {
           id: item.id,
@@ -1100,6 +1112,15 @@ async function processContentGeneration(jobId, campaign, title, options) {
     
     const jsonContent = JSON.stringify(contentData);
     logger.info(`JSON content length for job ${jobId}: ${jsonContent.length}`);
+    
+    // Validate JSON before saving
+    try {
+      const testParse = JSON.parse(jsonContent);
+      logger.info(`JSON validation successful for job ${jobId}`);
+    } catch (jsonError) {
+      logger.error(`JSON validation failed for job ${jobId}:`, jsonError);
+      throw new Error(`Invalid JSON generated: ${jsonError.message}`);
+    }
     
     const updateResult = await query(`
       UPDATE content_queue 
