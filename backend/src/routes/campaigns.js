@@ -782,79 +782,28 @@ router.post('/cleanup', authenticateToken, async (req, res) => {
     
     logger.info(`Starting content_queue cleanup for user ${userId}`);
     
-    // Get campaigns for this user
-    const campaigns = await query(`
-      SELECT id, topic FROM campaigns WHERE user_id = $1
-    `, [userId]);
-    
-    logger.info(`Found ${campaigns.rows.length} campaigns for cleanup`);
-    
-    let totalDeleted = 0;
-    
-    // Clean up each campaign's content_queue
-    for (const campaign of campaigns.rows) {
-      try {
-        // Count before cleanup
-        const beforeCount = await query(`
-          SELECT COUNT(*) as count
-          FROM content_queue 
-          WHERE campaign_id = $1
-        `, [campaign.id]);
-        
-        logger.info(`Campaign ${campaign.topic}: ${beforeCount.rows[0].count} records before cleanup`);
-        
-        // Simple cleanup: delete all records older than 7 days
-        const deleteResult = await query(`
-          DELETE FROM content_queue 
-          WHERE campaign_id = $1 
-          AND created_at < NOW() - INTERVAL '7 days'
-        `, [campaign.id]);
-        
-        totalDeleted += deleteResult.rowCount;
-        logger.info(`Campaign ${campaign.topic}: deleted ${deleteResult.rowCount} old records`);
-        
-      } catch (campaignError) {
-        logger.error(`Error cleaning campaign ${campaign.topic}:`, campaignError);
-        // Continue with other campaigns even if one fails
-      }
-    }
-    
-    // Clean up orphaned records
-    const orphanedResult = await query(`
-      DELETE FROM content_queue cq
-      WHERE NOT EXISTS (
-        SELECT 1 FROM campaigns c WHERE c.id = cq.campaign_id
+    // Simple cleanup: delete all content_queue records for this user
+    const deleteResult = await query(`
+      DELETE FROM content_queue 
+      WHERE campaign_id IN (
+        SELECT id FROM campaigns WHERE user_id = $1
       )
-    `);
-    
-    totalDeleted += orphanedResult.rowCount;
-    
-    // Get final counts
-    const finalCounts = await query(`
-      SELECT 
-        COUNT(*) as total,
-        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed
-      FROM content_queue cq
-      JOIN campaigns c ON cq.campaign_id = c.id
-      WHERE c.user_id = $1
     `, [userId]);
     
-    logger.info(`Cleanup completed: deleted ${totalDeleted} records`);
+    logger.info(`Cleanup completed: deleted ${deleteResult.rowCount} records`);
     
     res.json({
       success: true,
-      message: `Cleanup completed: deleted ${totalDeleted} records`,
-      finalCounts: {
-        total: parseInt(finalCounts.rows[0].total),
-        completed: parseInt(finalCounts.rows[0].completed)
-      }
+      message: `Cleanup completed: deleted ${deleteResult.rowCount} records`,
+      deletedCount: deleteResult.rowCount
     });
     
   } catch (error) {
     logger.error('Content queue cleanup error:', error);
     res.status(500).json({
       error: 'Internal server error',
-      message: 'Failed to cleanup content queue'
+      message: 'Failed to cleanup content queue',
+      details: error.message
     });
   }
 });
