@@ -940,27 +940,52 @@ router.get('/publishing-status/:campaignId', authenticateToken, async (req, res)
       });
     }
 
-    const content = await query(`
-      SELECT 
-        id, title, status, 
-        COALESCE(publishing_status, 'pending') as publishing_status,
-        created_at, completed_at, 
-        COALESCE(reviewed_at, NULL) as reviewed_at, 
-        COALESCE(published_at, NULL) as published_at,
-        scheduled_for, 
-        COALESCE(review_notes, NULL) as review_notes,
-        CASE 
-          WHEN COALESCE(publishing_status, 'pending') = 'published' THEN 'Published'
-          WHEN COALESCE(publishing_status, 'pending') = 'approved' THEN 'Approved (Scheduled)'
-          WHEN COALESCE(publishing_status, 'pending') = 'rejected' THEN 'Rejected'
-          WHEN status = 'completed' THEN 'Pending Review'
-          WHEN status = 'in_progress' THEN 'Generating'
-          ELSE 'Pending'
-        END as display_status
-      FROM content_queue 
-      WHERE campaign_id = $1
-      ORDER BY created_at DESC
-    `, [campaignId]);
+    // Try to get content with publishing status, fallback to basic query if columns don't exist
+    let content;
+    try {
+      content = await query(`
+        SELECT 
+          id, title, status, 
+          COALESCE(publishing_status, 'pending') as publishing_status,
+          created_at, completed_at, 
+          COALESCE(reviewed_at, NULL) as reviewed_at, 
+          COALESCE(published_at, NULL) as published_at,
+          scheduled_for, 
+          COALESCE(review_notes, NULL) as review_notes,
+          CASE 
+            WHEN COALESCE(publishing_status, 'pending') = 'published' THEN 'Published'
+            WHEN COALESCE(publishing_status, 'pending') = 'approved' THEN 'Approved (Scheduled)'
+            WHEN COALESCE(publishing_status, 'pending') = 'rejected' THEN 'Rejected'
+            WHEN status = 'completed' THEN 'Pending Review'
+            WHEN status = 'in_progress' THEN 'Generating'
+            ELSE 'Pending'
+          END as display_status
+        FROM content_queue 
+        WHERE campaign_id = $1
+        ORDER BY created_at DESC
+      `, [campaignId]);
+    } catch (columnError) {
+      // Fallback for databases without publishing status columns
+      logger.warn('Publishing status columns not available, using basic query');
+      content = await query(`
+        SELECT 
+          id, title, status, 
+          'pending' as publishing_status,
+          created_at, completed_at, 
+          NULL as reviewed_at, 
+          NULL as published_at,
+          scheduled_for, 
+          NULL as review_notes,
+          CASE 
+            WHEN status = 'completed' THEN 'Pending Review'
+            WHEN status = 'in_progress' THEN 'Generating'
+            ELSE 'Pending'
+          END as display_status
+        FROM content_queue 
+        WHERE campaign_id = $1
+        ORDER BY created_at DESC
+      `, [campaignId]);
+    }
 
     res.json({
       success: true,
