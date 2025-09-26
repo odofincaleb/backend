@@ -1099,18 +1099,32 @@ async function processContentGeneration(jobId, campaign, title, options) {
     let keywords = [];
     if (options.includeKeywords) {
       logger.info(`Generating keywords for job ${jobId}`);
-      keywords = await contentGenerator.generateKeywords(campaign.topic, blogPost.content);
-      logger.info(`Keywords generated for job ${jobId}: ${keywords.length} keywords`);
+      try {
+        keywords = await contentGenerator.generateKeywords(campaign.topic, blogPost.content);
+        logger.info(`Keywords generated for job ${jobId}: ${keywords.length} keywords`);
+      } catch (keywordError) {
+        logger.error(`Keyword generation failed for job ${jobId}:`, keywordError);
+        keywords = []; // Continue without keywords
+      }
     }
 
     // Save the generated content (backward compatible)
     logger.info(`Saving content for job ${jobId}`);
+    
+    // Log each field individually to identify the problematic one
+    logger.info(`Blog post content type: ${typeof blogPost.content}`);
+    logger.info(`Blog post wordCount type: ${typeof blogPost.wordCount}`);
+    logger.info(`Options contentType type: ${typeof options.contentType}`);
+    logger.info(`Options tone type: ${typeof options.tone}`);
+    logger.info(`Keywords type: ${typeof keywords}, length: ${Array.isArray(keywords) ? keywords.length : 'not array'}`);
+    
+    // Create a completely clean content data object
     const contentData = {
-      content: blogPost.content,
-      contentType: options.contentType,
-      wordCount: blogPost.wordCount,
-      tone: options.tone,
-      keywords,
+      content: String(blogPost.content || ''),
+      contentType: String(options.contentType || 'blog-post'),
+      wordCount: Number(blogPost.wordCount || 0),
+      tone: String(options.tone || 'conversational'),
+      keywords: Array.isArray(keywords) ? keywords : [],
       featuredImage: null
     };
     
