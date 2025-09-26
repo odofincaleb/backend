@@ -1106,6 +1106,15 @@ async function processContentGeneration(jobId, campaign, title, options) {
       objectKeys: Object.keys(blogPost)
     });
     
+    // Test if blogPost itself is serializable
+    try {
+      const blogPostTest = JSON.stringify(blogPost);
+      logger.info(`Blog post object serializes successfully for job ${jobId}`);
+    } catch (blogPostError) {
+      logger.error(`Blog post object serialization failed for job ${jobId}:`, blogPostError);
+      logger.error(`Blog post object that failed:`, blogPost);
+    }
+    
     // Generate keywords for SEO
     let keywords = [];
     if (options.includeKeywords) {
@@ -1129,15 +1138,24 @@ async function processContentGeneration(jobId, campaign, title, options) {
     logger.info(`Options tone type: ${typeof options.tone}`);
     logger.info(`Keywords type: ${typeof keywords}, length: ${Array.isArray(keywords) ? keywords.length : 'not array'}`);
     
-    // Create a completely clean content data object
+    // Create a completely clean content data object with explicit primitive conversion
     const contentData = {
-      content: String(blogPost.content || ''),
+      content: String(blogPost.content || '').trim(),
       contentType: String(options.contentType || 'blog-post'),
-      wordCount: Number(blogPost.wordCount || 0),
+      wordCount: parseInt(blogPost.wordCount || 0, 10),
       tone: String(options.tone || 'conversational'),
-      keywords: Array.isArray(keywords) ? keywords : [],
+      keywords: Array.isArray(keywords) ? keywords.map(k => String(k).trim()).filter(k => k.length > 0) : [],
       featuredImage: null
     };
+    
+    // Ensure all values are truly primitive
+    Object.keys(contentData).forEach(key => {
+      const value = contentData[key];
+      if (typeof value === 'object' && value !== null) {
+        logger.error(`Non-primitive value found in contentData.${key}:`, value);
+        contentData[key] = null;
+      }
+    });
     
     logger.info(`Content data for job ${jobId}:`, {
       contentLength: blogPost.content.length,
