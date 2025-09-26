@@ -50,33 +50,8 @@ const ContentGeneration = () => {
     }
   };
 
-  const handleGenerateContent = async () => {
-    if (!selectedTitle) {
-      toast.error('Please select a title');
-      return;
-    }
-
-    try {
-      setGenerating(true);
-      
-      const contentData = {
-        campaignId,
-        titleId: selectedTitle,
-        ...contentOptions
-      };
-
-      const response = await contentAPI.generate(contentData);
-      
-      toast.success('Content generated successfully!');
-      setContent(prev => [response.data.content, ...prev]);
-      
-    } catch (error) {
-      console.error('Error generating content:', error);
-      toast.error(error.response?.data?.message || 'Failed to generate content');
-    } finally {
-      setGenerating(false);
-    }
-  };
+  // Remove individual content generation - this should only be done from Campaign section
+  // Users should go back to Campaign -> Title Queue -> Generate Content for approved titles
 
   const handleStatusUpdate = async (contentId, status) => {
     try {
@@ -136,119 +111,22 @@ const ContentGeneration = () => {
       </div>
 
       <div className="content-layout">
-        {/* Generation Panel */}
+        {/* Instructions Panel */}
         <div className="generation-panel">
-          <h2>Generate New Content</h2>
-          
-          <div className="form-group">
-            <label htmlFor="title-select">Select Title:</label>
-            <select
-              id="title-select"
-              value={selectedTitle}
-              onChange={(e) => setSelectedTitle(e.target.value)}
-              className="form-control"
-            >
-              <option value="">Choose a title...</option>
-              {titles.map(title => (
-                <option key={title.id} value={title.id}>
-                  {title.title}
-                </option>
-              ))}
-            </select>
+          <h2>Content Management</h2>
+          <div style={{ padding: '1rem', background: '#f8f9fa', borderRadius: '8px', marginBottom: '1rem' }}>
+            <h3 style={{ margin: '0 0 0.5rem 0', color: '#333' }}>How to Generate New Content:</h3>
+            <ol style={{ margin: '0', paddingLeft: '1.5rem', lineHeight: '1.6' }}>
+              <li>Go to <strong>Campaigns</strong> page</li>
+              <li>Click on your campaign</li>
+              <li>Go to <strong>Title Queue</strong> section</li>
+              <li>Approve the titles you want</li>
+              <li>Click <strong>"Generate Content"</strong> button</li>
+            </ol>
+            <p style={{ margin: '1rem 0 0 0', color: '#666', fontSize: '0.9rem' }}>
+              <strong>Note:</strong> Content generation is only available from the Campaign section to ensure proper workflow.
+            </p>
           </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="content-type">Content Type:</label>
-              <select
-                id="content-type"
-                value={contentOptions.contentType}
-                onChange={(e) => setContentOptions(prev => ({
-                  ...prev,
-                  contentType: e.target.value
-                }))}
-                className="form-control"
-              >
-                <option value="blog-post">Blog Post</option>
-                <option value="how-to">How-to Guide</option>
-                <option value="listicle">Listicle</option>
-                <option value="case-study">Case Study</option>
-                <option value="newsletter">Newsletter</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="word-count">Word Count:</label>
-              <input
-                type="number"
-                id="word-count"
-                value={contentOptions.wordCount}
-                onChange={(e) => setContentOptions(prev => ({
-                  ...prev,
-                  wordCount: parseInt(e.target.value)
-                }))}
-                min="100"
-                max="5000"
-                className="form-control"
-              />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="tone">Tone:</label>
-              <select
-                id="tone"
-                value={contentOptions.tone}
-                onChange={(e) => setContentOptions(prev => ({
-                  ...prev,
-                  tone: e.target.value
-                }))}
-                className="form-control"
-              >
-                <option value="conversational">Conversational</option>
-                <option value="formal">Formal</option>
-                <option value="humorous">Humorous</option>
-                <option value="storytelling">Storytelling</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={contentOptions.includeKeywords}
-                onChange={(e) => setContentOptions(prev => ({
-                  ...prev,
-                  includeKeywords: e.target.checked
-                }))}
-              />
-              Include SEO Keywords
-            </label>
-          </div>
-
-          <div className="form-group">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={contentOptions.includeImages}
-                onChange={(e) => setContentOptions(prev => ({
-                  ...prev,
-                  includeImages: e.target.checked
-                }))}
-              />
-              Generate Featured Image
-            </label>
-          </div>
-
-          <button
-            className="btn btn-primary btn-large"
-            onClick={handleGenerateContent}
-            disabled={!selectedTitle || generating}
-          >
-            {generating ? 'Generating...' : 'Generate Content'}
-          </button>
         </div>
 
         {/* Content List */}

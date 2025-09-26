@@ -454,6 +454,14 @@ router.post('/bulk-generate', authenticateToken, async (req, res) => {
 
         const blogPost = await contentGenerator.generateBlogPost(campaign, contentOptions);
         
+        // Validate that content was actually generated
+        if (!blogPost || !blogPost.content || blogPost.content.trim().length === 0) {
+          logger.error(`No content generated for title: ${title.title}`);
+          throw new Error(`Failed to generate content for title: ${title.title}`);
+        }
+
+        logger.info(`Generated ${blogPost.content.length} characters of content for title: ${title.title}`);
+        
         // Generate keywords if requested
         let keywords = [];
         if (includeKeywords) {
