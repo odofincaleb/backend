@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Card, Badge, Spinner, Alert } from 'react-bootstrap';
-import { contentAPI, campaignAPI } from '../../services/api';
+import { contentAPI, campaignsAPI } from '../../services/api';
 import toast from 'react-hot-toast';
 
 const ContentDashboard = () => {
@@ -20,11 +20,11 @@ const ContentDashboard = () => {
       fetchJobs();
       fetchContent();
     }
-  }, [campaignId]);
+  }, [campaignId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchCampaign = async () => {
     try {
-      const response = await campaignAPI.getById(campaignId);
+      const response = await campaignsAPI.getById(campaignId);
       setCampaign(response.data);
     } catch (error) {
       console.error('Error fetching campaign:', error);
