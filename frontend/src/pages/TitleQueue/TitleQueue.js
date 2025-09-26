@@ -358,14 +358,14 @@ const TitleQueue = () => {
             id: 'content-generation'
           });
           
-          // Generate content for single title
+          // Generate content for single title (with reduced word count for speed)
           const response = await contentAPI.generate({
             campaignId,
             titleId: title.id,
             contentType: 'blog-post',
-            wordCount: 1000,
+            wordCount: 500, // Reduced word count for faster generation
             tone: campaign?.toneOfVoice || 'conversational',
-            includeKeywords: true,
+            includeKeywords: false, // Disabled for speed
             includeImages: false
           });
           

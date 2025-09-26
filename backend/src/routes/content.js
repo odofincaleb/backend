@@ -75,22 +75,19 @@ router.post('/generate', authenticateToken, async (req, res) => {
 
     logger.info(`Generating content for title: ${title.title}`);
 
-    // Generate the blog post content
+    // Generate the blog post content (simplified to avoid timeout)
     const contentOptions = {
       contentType,
-      wordCount,
+      wordCount: Math.min(wordCount, 500), // Reduce word count to speed up generation
       tone,
-      includeKeywords,
-      includeImages
+      includeKeywords: false, // Disable keywords to speed up generation
+      includeImages: false
     };
 
     const blogPost = await contentGenerator.generateBlogPost(campaign, contentOptions);
     
-    // Generate keywords if requested
+    // Skip keywords generation to avoid timeout
     let keywords = [];
-    if (includeKeywords) {
-      keywords = await contentGenerator.generateKeywords(campaign.topic, blogPost.content);
-    }
 
     // Generate featured image if requested (DISABLED to prevent unnecessary API calls)
     let featuredImage = null;
