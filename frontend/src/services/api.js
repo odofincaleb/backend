@@ -154,6 +154,11 @@ export const campaignsAPI = {
   getContentTypes: () => retryRequest({
     method: 'GET',
     url: '/campaigns/content-types'
+  }),
+  
+  cleanupContentQueue: () => retryRequest({
+    method: 'POST',
+    url: '/campaigns/cleanup'
   })
 };
 

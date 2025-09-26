@@ -245,14 +245,41 @@ const Campaigns = () => {
     return `${diffDays}d`;
   };
 
+  const handleCleanupContentQueue = async () => {
+    try {
+      setLoading(true);
+      const response = await campaignsAPI.cleanupContentQueue();
+      
+      toast.success(`Cleanup completed: ${response.data.message}`);
+      
+      // Refresh campaigns to show updated counts
+      await fetchCampaigns();
+    } catch (error) {
+      console.error('Error cleaning up content queue:', error);
+      toast.error('Failed to cleanup content queue');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <CampaignsContainer>
       <Header>
         <Title>Campaigns</Title>
-        <Button as={Link} to="/campaigns/create" variant="primary">
-          <Plus size={20} />
-          Create Campaign
-        </Button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <Button 
+            onClick={handleCleanupContentQueue}
+            variant="secondary"
+            disabled={loading}
+            style={{ fontSize: '0.875rem' }}
+          >
+            🧹 Cleanup Counts
+          </Button>
+          <Button as={Link} to="/campaigns/create" variant="primary">
+            <Plus size={20} />
+            Create Campaign
+          </Button>
+        </div>
       </Header>
 
       {loading ? (

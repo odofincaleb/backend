@@ -772,4 +772,90 @@ router.post('/:id/stop', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/campaigns/cleanup
+ * Clean up content_queue table to fix inflated counts
+ */
+router.post('/cleanup', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    logger.info(`Starting content_queue cleanup for user ${userId}`);
+    
+    // Get campaigns for this user
+    const campaigns = await query(`
+      SELECT id, topic FROM campaigns WHERE user_id = $1
+    `, [userId]);
+    
+    let totalDeleted = 0;
+    
+    // Clean up each campaign's content_queue
+    for (const campaign of campaigns.rows) {
+      // Count before cleanup
+      const beforeCount = await query(`
+        SELECT COUNT(*) as count
+        FROM content_queue 
+        WHERE campaign_id = $1
+      `, [campaign.id]);
+      
+      // Delete old records, keep only the latest 10 per campaign
+      const deleteResult = await query(`
+        DELETE FROM content_queue 
+        WHERE campaign_id = $1 
+        AND id NOT IN (
+          SELECT id FROM (
+            SELECT id 
+            FROM content_queue 
+            WHERE campaign_id = $1 
+            ORDER BY created_at DESC 
+            LIMIT 10
+          ) as keep_records
+        )
+      `, [campaign.id]);
+      
+      totalDeleted += deleteResult.rowCount;
+      
+      logger.info(`Campaign ${campaign.topic}: deleted ${deleteResult.rowCount} old records`);
+    }
+    
+    // Clean up orphaned records
+    const orphanedResult = await query(`
+      DELETE FROM content_queue cq
+      WHERE NOT EXISTS (
+        SELECT 1 FROM campaigns c WHERE c.id = cq.campaign_id
+      )
+    `);
+    
+    totalDeleted += orphanedResult.rowCount;
+    
+    // Get final counts
+    const finalCounts = await query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed
+      FROM content_queue cq
+      JOIN campaigns c ON cq.campaign_id = c.id
+      WHERE c.user_id = $1
+    `, [userId]);
+    
+    logger.info(`Cleanup completed: deleted ${totalDeleted} records`);
+    
+    res.json({
+      success: true,
+      message: `Cleanup completed: deleted ${totalDeleted} records`,
+      finalCounts: {
+        total: parseInt(finalCounts.rows[0].total),
+        completed: parseInt(finalCounts.rows[0].completed)
+      }
+    });
+    
+  } catch (error) {
+    logger.error('Content queue cleanup error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to cleanup content queue'
+    });
+  }
+});
+
 module.exports = router;
