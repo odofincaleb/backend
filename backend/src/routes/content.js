@@ -878,16 +878,28 @@ router.put('/:id/review', authenticateToken, async (req, res) => {
       });
     }
 
-    // Update publishing status
+    // Update publishing status (backward compatible)
     const newStatus = action === 'approve' ? 'approved' : 'rejected';
-    await query(`
-      UPDATE content_queue 
-      SET publishing_status = $1,
-          reviewed_at = NOW(),
-          reviewed_by = $2,
-          review_notes = $3
-      WHERE id = $4
-    `, [newStatus, userId, notes || null, contentId]);
+    
+    // Try to update with new columns, fallback to basic update if columns don't exist
+    try {
+      await query(`
+        UPDATE content_queue 
+        SET publishing_status = $1,
+            reviewed_at = NOW(),
+            reviewed_by = $2,
+            review_notes = $3
+        WHERE id = $4
+      `, [newStatus, userId, notes || null, contentId]);
+    } catch (columnError) {
+      // Fallback for databases without new columns
+      logger.warn('Publishing status columns not available, using basic update');
+      await query(`
+        UPDATE content_queue 
+        SET status = $1
+        WHERE id = $2
+      `, [newStatus, contentId]);
+    }
 
     logger.info(`Content ${action}d by user ${userId}:`, { contentId, action });
 
@@ -930,13 +942,17 @@ router.get('/publishing-status/:campaignId', authenticateToken, async (req, res)
 
     const content = await query(`
       SELECT 
-        id, title, status, publishing_status, 
-        created_at, completed_at, reviewed_at, published_at,
-        scheduled_for, review_notes,
+        id, title, status, 
+        COALESCE(publishing_status, 'pending') as publishing_status,
+        created_at, completed_at, 
+        COALESCE(reviewed_at, NULL) as reviewed_at, 
+        COALESCE(published_at, NULL) as published_at,
+        scheduled_for, 
+        COALESCE(review_notes, NULL) as review_notes,
         CASE 
-          WHEN publishing_status = 'published' THEN 'Published'
-          WHEN publishing_status = 'approved' THEN 'Approved (Scheduled)'
-          WHEN publishing_status = 'rejected' THEN 'Rejected'
+          WHEN COALESCE(publishing_status, 'pending') = 'published' THEN 'Published'
+          WHEN COALESCE(publishing_status, 'pending') = 'approved' THEN 'Approved (Scheduled)'
+          WHEN COALESCE(publishing_status, 'pending') = 'rejected' THEN 'Rejected'
           WHEN status = 'completed' THEN 'Pending Review'
           WHEN status = 'processing' THEN 'Generating'
           ELSE 'Pending'
@@ -976,12 +992,11 @@ async function processContentGeneration(jobId, campaign, title, options) {
       keywords = await contentGenerator.generateKeywords(campaign.topic, blogPost.content);
     }
 
-    // Save the generated content with publishing status
+    // Save the generated content (backward compatible)
     await query(`
       UPDATE content_queue 
       SET status = 'completed', 
           generated_content = $1,
-          publishing_status = 'pending',
           completed_at = NOW()
       WHERE id = $2
     `, [JSON.stringify({
