@@ -1091,15 +1091,45 @@ async function processContentGeneration(jobId, campaign, title, options) {
       featuredImage: null
     };
     
-    await query(`
+    logger.info(`Content data for job ${jobId}:`, {
+      contentLength: blogPost.content.length,
+      wordCount: blogPost.wordCount,
+      contentType: options.contentType,
+      keywordsCount: keywords.length
+    });
+    
+    const jsonContent = JSON.stringify(contentData);
+    logger.info(`JSON content length for job ${jobId}: ${jsonContent.length}`);
+    
+    const updateResult = await query(`
       UPDATE content_queue 
       SET status = 'completed', 
           generated_content = $1,
           completed_at = NOW()
       WHERE id = $2
-    `, [JSON.stringify(contentData), jobId]);
+    `, [jsonContent, jobId]);
 
-    logger.info(`Content generation completed for job ${jobId} - Content saved successfully`);
+    logger.info(`Content generation completed for job ${jobId} - Content saved successfully. Rows affected: ${updateResult.rowCount}`);
+    
+    // Verify the content was saved
+    const verifyResult = await query(`
+      SELECT generated_content FROM content_queue WHERE id = $1
+    `, [jobId]);
+    
+    if (verifyResult.rows.length > 0) {
+      const savedContent = verifyResult.rows[0].generated_content;
+      if (savedContent) {
+        const parsedContent = JSON.parse(savedContent);
+        logger.info(`Content verification for job ${jobId}:`, {
+          savedContentLength: parsedContent.content ? parsedContent.content.length : 0,
+          savedWordCount: parsedContent.wordCount || 0
+        });
+      } else {
+        logger.error(`Content verification failed for job ${jobId}: No content found in database`);
+      }
+    } else {
+      logger.error(`Content verification failed for job ${jobId}: Job not found`);
+    }
     
   } catch (error) {
     logger.error(`Content generation failed for job ${jobId}:`, error);
