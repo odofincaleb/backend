@@ -9,13 +9,16 @@ const ContentDashboard = () => {
   const navigate = useNavigate();
   const [campaign, setCampaign] = useState(null);
   const [jobs, setJobs] = useState([]);
+  const [content, setContent] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('jobs');
 
   useEffect(() => {
     if (campaignId) {
       fetchCampaign();
       fetchJobs();
+      fetchContent();
     }
   }, [campaignId]);
 
@@ -40,6 +43,16 @@ const ContentDashboard = () => {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const fetchContent = async () => {
+    try {
+      const response = await contentAPI.getPublishingStatus(campaignId);
+      setContent(response.data.content);
+    } catch (error) {
+      console.error('Error fetching content:', error);
+      toast.error('Failed to load content status');
     }
   };
 
@@ -68,6 +81,28 @@ const ContentDashboard = () => {
 
   const handleRefresh = () => {
     fetchJobs();
+    fetchContent();
+  };
+
+  const handleReview = async (contentId, action, notes = '') => {
+    try {
+      await contentAPI.reviewContent(contentId, { action, notes });
+      toast.success(`Content ${action}d successfully`);
+      fetchContent(); // Refresh content status
+    } catch (error) {
+      console.error('Error reviewing content:', error);
+      toast.error(`Failed to ${action} content`);
+    }
+  };
+
+  const getPublishingStatusBadge = (status) => {
+    const variants = {
+      'published': 'success',
+      'approved': 'info',
+      'rejected': 'danger',
+      'pending': 'warning'
+    };
+    return <Badge bg={variants[status] || 'secondary'}>{status}</Badge>;
   };
 
   const processingJobs = jobs.filter(job => job.status === 'processing');
@@ -158,23 +193,47 @@ const ContentDashboard = () => {
             </Alert>
           )}
 
-          {/* Jobs List */}
+          {/* Tabs */}
           <Card>
             <Card.Header>
-              <h5 className="mb-0">Content Generation Jobs</h5>
+              <div className="d-flex justify-content-between align-items-center">
+                <div className="nav nav-tabs border-0" role="tablist">
+                  <button 
+                    className={`nav-link ${activeTab === 'jobs' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('jobs')}
+                  >
+                    Generation Jobs
+                  </button>
+                  <button 
+                    className={`nav-link ${activeTab === 'content' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('content')}
+                  >
+                    Content Review
+                  </button>
+                </div>
+                <Button 
+                  variant="outline-primary" 
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  size="sm"
+                >
+                  {refreshing ? <Spinner size="sm" /> : '🔄'} Refresh
+                </Button>
+              </div>
             </Card.Header>
             <Card.Body>
-              {jobs.length === 0 ? (
-                <div className="text-center py-4">
-                  <p className="text-muted">No content generation jobs found.</p>
-                  <Button 
-                    variant="primary" 
-                    onClick={() => navigate(`/campaigns/${campaignId}/titles`)}
-                  >
-                    Go to Title Queue
-                  </Button>
-                </div>
-              ) : (
+              {activeTab === 'jobs' ? (
+                jobs.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-muted">No content generation jobs found.</p>
+                    <Button 
+                      variant="primary" 
+                      onClick={() => navigate(`/campaigns/${campaignId}/titles`)}
+                    >
+                      Go to Title Queue
+                    </Button>
+                  </div>
+                ) : (
                 <div className="table-responsive">
                   <table className="table table-hover">
                     <thead>
@@ -221,6 +280,71 @@ const ContentDashboard = () => {
                     </tbody>
                   </table>
                 </div>
+                )
+              ) : (
+                // Content Review Tab
+                content.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-muted">No content available for review.</p>
+                  </div>
+                ) : (
+                  <div className="table-responsive">
+                    <table className="table table-hover">
+                      <thead>
+                        <tr>
+                          <th>Title</th>
+                          <th>Status</th>
+                          <th>Publishing Status</th>
+                          <th>Created</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {content.map((item) => (
+                          <tr key={item.id}>
+                            <td>
+                              <div className="fw-bold">{item.title}</div>
+                              {item.review_notes && (
+                                <small className="text-muted">{item.review_notes}</small>
+                              )}
+                            </td>
+                            <td>{getStatusBadge(item.status)}</td>
+                            <td>{getPublishingStatusBadge(item.publishing_status)}</td>
+                            <td>{formatDate(item.created_at)}</td>
+                            <td>
+                              {item.status === 'completed' && item.publishing_status === 'pending' ? (
+                                <div className="btn-group" role="group">
+                                  <Button 
+                                    variant="outline-success" 
+                                    size="sm"
+                                    onClick={() => handleReview(item.id, 'approve')}
+                                  >
+                                    ✓ Approve
+                                  </Button>
+                                  <Button 
+                                    variant="outline-danger" 
+                                    size="sm"
+                                    onClick={() => handleReview(item.id, 'reject')}
+                                  >
+                                    ✗ Reject
+                                  </Button>
+                                </div>
+                              ) : item.publishing_status === 'approved' ? (
+                                <span className="text-info">✓ Approved (Scheduled)</span>
+                              ) : item.publishing_status === 'published' ? (
+                                <span className="text-success">✓ Published</span>
+                              ) : item.publishing_status === 'rejected' ? (
+                                <span className="text-danger">✗ Rejected</span>
+                              ) : (
+                                <span className="text-muted">No actions available</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
               )}
             </Card.Body>
           </Card>

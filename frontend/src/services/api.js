@@ -235,6 +235,17 @@ export const contentAPI = {
   getJobStatus: (jobId) => retryRequest({
     method: 'GET',
     url: `/content/status/${jobId}`
+  }),
+  
+  getPublishingStatus: (campaignId) => retryRequest({
+    method: 'GET',
+    url: `/content/publishing-status/${campaignId}`
+  }),
+  
+  reviewContent: (contentId, reviewData) => retryRequest({
+    method: 'PUT',
+    url: `/content/${contentId}/review`,
+    data: reviewData
   })
 };
 

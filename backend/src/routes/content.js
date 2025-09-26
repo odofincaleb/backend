@@ -838,6 +838,129 @@ router.get('/jobs/:campaignId', authenticateToken, async (req, res) => {
 });
 
 /**
+ * PUT /api/content/:id/review
+ * Review and approve/reject content before publishing
+ */
+router.put('/:id/review', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const contentId = req.params.id;
+    const { action, notes } = req.body; // action: 'approve' or 'reject'
+
+    if (!action || !['approve', 'reject'].includes(action)) {
+      return res.status(400).json({
+        error: 'Invalid action',
+        message: 'Action must be either "approve" or "reject"'
+      });
+    }
+
+    // Verify content belongs to user
+    const contentResult = await query(`
+      SELECT cq.*, c.user_id 
+      FROM content_queue cq
+      JOIN campaigns c ON cq.campaign_id = c.id
+      WHERE cq.id = $1 AND c.user_id = $2
+    `, [contentId, userId]);
+
+    if (contentResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Content not found',
+        message: 'The specified content does not exist or does not belong to you'
+      });
+    }
+
+    const content = contentResult.rows[0];
+
+    if (content.status !== 'completed') {
+      return res.status(400).json({
+        error: 'Content not ready',
+        message: 'Content must be completed before review'
+      });
+    }
+
+    // Update publishing status
+    const newStatus = action === 'approve' ? 'approved' : 'rejected';
+    await query(`
+      UPDATE content_queue 
+      SET publishing_status = $1,
+          reviewed_at = NOW(),
+          reviewed_by = $2,
+          review_notes = $3
+      WHERE id = $4
+    `, [newStatus, userId, notes || null, contentId]);
+
+    logger.info(`Content ${action}d by user ${userId}:`, { contentId, action });
+
+    res.json({
+      success: true,
+      message: `Content ${action}d successfully`,
+      publishingStatus: newStatus
+    });
+
+  } catch (error) {
+    logger.error('Review content error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to review content'
+    });
+  }
+});
+
+/**
+ * GET /api/content/publishing-status/:campaignId
+ * Get content with publishing status for a campaign
+ */
+router.get('/publishing-status/:campaignId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const campaignId = req.params.campaignId;
+
+    // Verify campaign belongs to user
+    const campaignResult = await query(
+      'SELECT id FROM campaigns WHERE id = $1 AND user_id = $2',
+      [campaignId, userId]
+    );
+
+    if (campaignResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Campaign not found',
+        message: 'The specified campaign does not exist or does not belong to you'
+      });
+    }
+
+    const content = await query(`
+      SELECT 
+        id, title, status, publishing_status, 
+        created_at, completed_at, reviewed_at, published_at,
+        scheduled_for, review_notes,
+        CASE 
+          WHEN publishing_status = 'published' THEN 'Published'
+          WHEN publishing_status = 'approved' THEN 'Approved (Scheduled)'
+          WHEN publishing_status = 'rejected' THEN 'Rejected'
+          WHEN status = 'completed' THEN 'Pending Review'
+          WHEN status = 'processing' THEN 'Generating'
+          ELSE 'Pending'
+        END as display_status
+      FROM content_queue 
+      WHERE campaign_id = $1
+      ORDER BY created_at DESC
+    `, [campaignId]);
+
+    res.json({
+      success: true,
+      content: content.rows
+    });
+
+  } catch (error) {
+    logger.error('Get publishing status error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to get publishing status'
+    });
+  }
+});
+
+/**
  * Background content generation function
  */
 async function processContentGeneration(jobId, campaign, title, options) {
@@ -853,11 +976,12 @@ async function processContentGeneration(jobId, campaign, title, options) {
       keywords = await contentGenerator.generateKeywords(campaign.topic, blogPost.content);
     }
 
-    // Save the generated content
+    // Save the generated content with publishing status
     await query(`
       UPDATE content_queue 
       SET status = 'completed', 
           generated_content = $1,
+          publishing_status = 'pending',
           completed_at = NOW()
       WHERE id = $2
     `, [JSON.stringify({
