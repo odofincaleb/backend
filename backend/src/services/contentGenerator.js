@@ -31,18 +31,18 @@ async function generateBlogPost(campaign, options = {}) {
     });
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo', // Use faster model to reduce generation time
+      model: 'gpt-4', // Use GPT-4 for high-quality SEO content
         messages: [
           {
           role: 'system',
-          content: 'You are an expert content writer. Write engaging, SEO-optimized blog posts in a professional yet accessible tone.'
+          content: 'You are an expert SEO content writer specializing in creating comprehensive, engaging blog posts that rank well in search engines. Write in-depth, valuable content that provides real value to readers while being optimized for search rankings.'
           },
           {
           role: 'user',
             content: prompt
           }
         ],
-      max_tokens: Math.min(wordCount * 1.5, 2000), // Reduce token limit for faster generation
+      max_tokens: Math.min(wordCount * 2, 4000), // Restore full token limit for quality content
       temperature: 0.7,
       presence_penalty: 0.1,
       frequency_penalty: 0.1

@@ -75,19 +75,22 @@ router.post('/generate', authenticateToken, async (req, res) => {
 
     logger.info(`Generating content for title: ${title.title}`);
 
-    // Generate the blog post content (simplified to avoid timeout)
+    // Generate the blog post content (restored for SEO quality)
     const contentOptions = {
       contentType,
-      wordCount: Math.min(wordCount, 500), // Reduce word count to speed up generation
+      wordCount: Math.max(wordCount, 1000), // Ensure minimum 1000 words for SEO
       tone,
-      includeKeywords: false, // Disable keywords to speed up generation
+      includeKeywords: true, // Re-enable keywords for SEO
       includeImages: false
     };
 
     const blogPost = await contentGenerator.generateBlogPost(campaign, contentOptions);
     
-    // Skip keywords generation to avoid timeout
+    // Generate keywords for SEO (essential for search rankings)
     let keywords = [];
+    if (includeKeywords) {
+      keywords = await contentGenerator.generateKeywords(campaign.topic, blogPost.content);
+    }
 
     // Generate featured image if requested (DISABLED to prevent unnecessary API calls)
     let featuredImage = null;

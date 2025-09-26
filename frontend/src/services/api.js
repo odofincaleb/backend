@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 // Create axios instance
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 'https://backend-4wma.onrender.com/api',
-  timeout: 60000, // 1 minute for content generation
+  timeout: 180000, // 3 minutes for high-quality SEO content generation
   headers: {
     'Content-Type': 'application/json'
   },

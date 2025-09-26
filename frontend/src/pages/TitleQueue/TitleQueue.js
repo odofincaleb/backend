@@ -337,7 +337,7 @@ const TitleQueue = () => {
       return;
     }
 
-    if (!window.confirm(`Generate content for ${approvedTitles.length} approved titles? This will process them one by one to avoid timeouts.`)) {
+    if (!window.confirm(`Generate high-quality SEO content for ${approvedTitles.length} approved titles? This will create comprehensive 1000+ word articles with keywords. Processing may take 2-3 minutes per title.`)) {
       return;
     }
 
@@ -352,20 +352,20 @@ const TitleQueue = () => {
         const title = approvedTitles[i];
         
         try {
-          // Show progress toast
-          toast.loading(`Generating content ${i + 1}/${approvedTitles.length}: ${title.title}`, {
+          // Show progress toast with SEO context
+          toast.loading(`Generating SEO content ${i + 1}/${approvedTitles.length}: ${title.title} (1000+ words, keywords)`, {
             duration: 0,
             id: 'content-generation'
           });
           
-          // Generate content for single title (with reduced word count for speed)
+          // Generate content for single title (restored for SEO quality)
           const response = await contentAPI.generate({
             campaignId,
             titleId: title.id,
             contentType: 'blog-post',
-            wordCount: 500, // Reduced word count for faster generation
+            wordCount: 1000, // Restored for SEO - longer content ranks better
             tone: campaign?.toneOfVoice || 'conversational',
-            includeKeywords: false, // Disabled for speed
+            includeKeywords: true, // Re-enabled for SEO
             includeImages: false
           });
           
