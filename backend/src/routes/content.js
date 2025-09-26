@@ -110,6 +110,8 @@ router.post('/generate', authenticateToken, async (req, res) => {
       jobId: jobId,
       status: 'processing'
     });
+    
+    logger.info(`Content generation job ${jobId} started for title: ${title.title}`);
 
 
   } catch (error) {
@@ -1095,6 +1097,15 @@ async function processContentGeneration(jobId, campaign, title, options) {
     const blogPost = await contentGenerator.generateBlogPost(cleanCampaign, options);
     logger.info(`Blog post generated for job ${jobId}, word count: ${blogPost.wordCount}`);
     
+    // Log the blogPost object structure to debug
+    logger.info(`Blog post object for job ${jobId}:`, {
+      hasContent: !!blogPost.content,
+      contentLength: blogPost.content ? blogPost.content.length : 0,
+      wordCount: blogPost.wordCount,
+      generatedAt: blogPost.generatedAt,
+      objectKeys: Object.keys(blogPost)
+    });
+    
     // Generate keywords for SEO
     let keywords = [];
     if (options.includeKeywords) {
@@ -1134,6 +1145,28 @@ async function processContentGeneration(jobId, campaign, title, options) {
       contentType: options.contentType,
       keywordsCount: keywords.length
     });
+    
+    // Test each field individually for serialization
+    try {
+      JSON.stringify({ content: contentData.content });
+      logger.info(`Content field serializes successfully for job ${jobId}`);
+    } catch (e) {
+      logger.error(`Content field serialization failed for job ${jobId}:`, e);
+    }
+    
+    try {
+      JSON.stringify({ wordCount: contentData.wordCount });
+      logger.info(`WordCount field serializes successfully for job ${jobId}`);
+    } catch (e) {
+      logger.error(`WordCount field serialization failed for job ${jobId}:`, e);
+    }
+    
+    try {
+      JSON.stringify({ keywords: contentData.keywords });
+      logger.info(`Keywords field serializes successfully for job ${jobId}`);
+    } catch (e) {
+      logger.error(`Keywords field serialization failed for job ${jobId}:`, e);
+    }
     
     // Try to serialize the content data
     let jsonContent;
