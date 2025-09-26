@@ -256,30 +256,48 @@ const safeMigrate = async () => {
       }
     }
 
-    // Create triggers if they don't exist
-    await query(`
-      CREATE OR REPLACE FUNCTION update_updated_at_column()
-      RETURNS TRIGGER AS $$
-      BEGIN
-          NEW.updated_at = CURRENT_TIMESTAMP;
-          RETURN NEW;
-      END;
-      $$ language 'plpgsql'
-    `);
+    // Create triggers if they don't exist (with better error handling)
+    try {
+      await query(`
+        CREATE OR REPLACE FUNCTION update_updated_at_column()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = CURRENT_TIMESTAMP;
+            RETURN NEW;
+        END;
+        $$ language 'plpgsql'
+      `);
+      logger.info('Created update_updated_at_column function');
+    } catch (error) {
+      logger.warn('Function creation failed:', error.message);
+    }
 
     const triggers = [
-      'CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()',
-      'CREATE TRIGGER update_wordpress_sites_updated_at BEFORE UPDATE ON wordpress_sites FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()',
-      'CREATE TRIGGER update_campaigns_updated_at BEFORE UPDATE ON campaigns FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()',
-      'CREATE TRIGGER update_title_queue_updated_at BEFORE UPDATE ON title_queue FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()'
+      { name: 'update_users_updated_at', table: 'users' },
+      { name: 'update_wordpress_sites_updated_at', table: 'wordpress_sites' },
+      { name: 'update_campaigns_updated_at', table: 'campaigns' },
+      { name: 'update_title_queue_updated_at', table: 'title_queue' }
     ];
 
-    for (const triggerQuery of triggers) {
+    for (const trigger of triggers) {
       try {
-        await query(triggerQuery);
-        logger.info('Created trigger');
+        // Check if trigger already exists
+        const checkResult = await query(`
+          SELECT 1 FROM pg_trigger WHERE tgname = $1
+        `, [trigger.name]);
+        
+        if (checkResult.rows.length === 0) {
+          await query(`
+            CREATE TRIGGER ${trigger.name} 
+            BEFORE UPDATE ON ${trigger.table} 
+            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()
+          `);
+          logger.info(`Created trigger ${trigger.name}`);
+        } else {
+          logger.info(`Trigger ${trigger.name} already exists`);
+        }
       } catch (error) {
-        logger.warn('Trigger creation failed:', error.message);
+        logger.warn(`Trigger creation failed for ${trigger.name}:`, error.message);
       }
     }
 

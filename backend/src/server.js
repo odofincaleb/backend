@@ -76,7 +76,7 @@ app.use(morgan('combined', {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint
+// Health check endpoint (simple, no database queries)
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'OK',
@@ -84,6 +84,11 @@ app.get('/health', (req, res) => {
     uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development'
   });
+});
+
+// Simple ping endpoint for basic connectivity
+app.get('/ping', (req, res) => {
+  res.status(200).json({ message: 'pong' });
 });
 
 // API routes
