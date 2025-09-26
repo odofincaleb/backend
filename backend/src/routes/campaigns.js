@@ -124,18 +124,12 @@ router.get('/', authenticateToken, async (req, res) => {
                 c.imperfection_list, c.schedule, c.schedule_hours, c.status, c.next_publish_at,
                 c.created_at, c.updated_at, c.content_types, c.content_type_variables,
                 ws.site_name, ws.site_url,
-                COUNT(cq.id) as posts_published,
-                COUNT(tq.id) as titles_in_queue,
-                COUNT(CASE WHEN tq.status = 'approved' THEN 1 END) as approved_titles
+                (SELECT COUNT(*) FROM content_queue cq WHERE cq.campaign_id = c.id AND cq.status = 'completed') as posts_published,
+                (SELECT COUNT(*) FROM title_queue tq WHERE tq.campaign_id = c.id) as titles_in_queue,
+                (SELECT COUNT(*) FROM title_queue tq WHERE tq.campaign_id = c.id AND tq.status = 'approved') as approved_titles
          FROM campaigns c
          LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
-         LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
-         LEFT JOIN title_queue tq ON c.id = tq.campaign_id
          WHERE c.user_id = $1
-         GROUP BY c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
-                  c.imperfection_list, c.schedule, c.schedule_hours, c.status, c.next_publish_at,
-                  c.created_at, c.updated_at, c.content_types, c.content_type_variables,
-                  ws.site_name, ws.site_url
          ORDER BY c.created_at DESC`,
         [userId]
       );
@@ -147,17 +141,12 @@ router.get('/', authenticateToken, async (req, res) => {
               c.imperfection_list, c.schedule, c.status, c.next_publish_at,
               c.created_at, c.updated_at,
               ws.site_name, ws.site_url,
-              COUNT(cq.id) as posts_published,
-              COUNT(tq.id) as titles_in_queue,
-              COUNT(CASE WHEN tq.status = 'approved' THEN 1 END) as approved_titles
+              (SELECT COUNT(*) FROM content_queue cq WHERE cq.campaign_id = c.id AND cq.status = 'completed') as posts_published,
+              (SELECT COUNT(*) FROM title_queue tq WHERE tq.campaign_id = c.id) as titles_in_queue,
+              (SELECT COUNT(*) FROM title_queue tq WHERE tq.campaign_id = c.id AND tq.status = 'approved') as approved_titles
        FROM campaigns c
        LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
-       LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
-       LEFT JOIN title_queue tq ON c.id = tq.campaign_id
        WHERE c.user_id = $1
-       GROUP BY c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
-                c.imperfection_list, c.schedule, c.status, c.next_publish_at,
-                c.created_at, c.updated_at, ws.site_name, ws.site_url
        ORDER BY c.created_at DESC`,
       [userId]
     );
@@ -166,29 +155,34 @@ router.get('/', authenticateToken, async (req, res) => {
       }
     }
 
-    const campaigns = result.rows.map(campaign => ({
-      id: campaign.id,
-      topic: campaign.topic,
-      context: campaign.context,
-      toneOfVoice: campaign.tone_of_voice,
-      writingStyle: campaign.writing_style,
-      imperfectionList: campaign.imperfection_list,
-      schedule: campaign.schedule,
-      scheduleHours: campaign.schedule_hours || (campaign.schedule ? parseInt(campaign.schedule.replace('h', '')) : 24),
-      status: campaign.status,
-      nextPublishAt: campaign.next_publish_at,
-      wordpressSite: campaign.site_name ? {
-        name: campaign.site_name,
-        url: campaign.site_url
-      } : null,
-      postsPublished: parseInt(campaign.posts_published),
-      titlesInQueue: parseInt(campaign.titles_in_queue),
-      approvedTitles: parseInt(campaign.approved_titles),
-      contentTypes: campaign.content_types || Object.keys(contentTypeTemplates.getAllContentTypes()),
-      contentTypeVariables: campaign.content_type_variables || {},
-      createdAt: campaign.created_at,
-      updatedAt: campaign.updated_at
-    }));
+    const campaigns = result.rows.map(campaign => {
+      // Debug logging for count issues
+      logger.info(`Campaign ${campaign.topic}: posts=${campaign.posts_published}, titles=${campaign.titles_in_queue}, approved=${campaign.approved_titles}`);
+      
+      return {
+        id: campaign.id,
+        topic: campaign.topic,
+        context: campaign.context,
+        toneOfVoice: campaign.tone_of_voice,
+        writingStyle: campaign.writing_style,
+        imperfectionList: campaign.imperfection_list,
+        schedule: campaign.schedule,
+        scheduleHours: campaign.schedule_hours || (campaign.schedule ? parseInt(campaign.schedule.replace('h', '')) : 24),
+        status: campaign.status,
+        nextPublishAt: campaign.next_publish_at,
+        wordpressSite: campaign.site_name ? {
+          name: campaign.site_name,
+          url: campaign.site_url
+        } : null,
+        postsPublished: parseInt(campaign.posts_published),
+        titlesInQueue: parseInt(campaign.titles_in_queue),
+        approvedTitles: parseInt(campaign.approved_titles),
+        contentTypes: campaign.content_types || Object.keys(contentTypeTemplates.getAllContentTypes()),
+        contentTypeVariables: campaign.content_type_variables || {},
+        createdAt: campaign.created_at,
+        updatedAt: campaign.updated_at
+      };
+    });
 
     res.json({
       success: true,
