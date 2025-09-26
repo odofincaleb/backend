@@ -337,12 +337,18 @@ const TitleQueue = () => {
       return;
     }
 
-    if (!window.confirm(`Generate content for ${approvedTitles.length} approved titles?`)) {
+    if (!window.confirm(`Generate content for ${approvedTitles.length} approved titles? This may take 1-2 minutes.`)) {
       return;
     }
 
     try {
       setGeneratingContent(true);
+      
+      // Show progress toast
+      toast.loading(`Generating content for ${approvedTitles.length} titles... This may take 1-2 minutes.`, {
+        duration: 0, // Keep loading toast until we dismiss it
+        id: 'content-generation'
+      });
       
       // Use bulk content generation API (images disabled to prevent costs)
       const response = await contentAPI.bulkGenerate({
@@ -355,13 +361,26 @@ const TitleQueue = () => {
         includeImages: false // DISABLED to prevent unnecessary API costs
       });
 
+      // Dismiss loading toast and show success
+      toast.dismiss('content-generation');
       toast.success(`Generated content for ${response.data.content.length} titles`);
       
       // Navigate to content generation page
       window.location.href = `/content/${campaignId}`;
     } catch (error) {
       console.error('Error generating content:', error);
-      toast.error('Failed to generate content for some titles');
+      
+      // Dismiss loading toast
+      toast.dismiss('content-generation');
+      
+      // Show specific error messages
+      if (error.code === 'ECONNABORTED') {
+        toast.error('Content generation timed out. Please try again with fewer titles.');
+      } else if (error.response?.status === 500) {
+        toast.error('Server error during content generation. Please try again.');
+      } else {
+        toast.error('Failed to generate content. Please try again.');
+      }
     } finally {
       setGeneratingContent(false);
     }
