@@ -132,7 +132,10 @@ router.get('/', authenticateToken, async (req, res) => {
          LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
          LEFT JOIN title_queue tq ON c.id = tq.campaign_id
          WHERE c.user_id = $1
-         GROUP BY c.id, ws.site_name, ws.site_url
+         GROUP BY c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
+                  c.imperfection_list, c.schedule, c.schedule_hours, c.status, c.next_publish_at,
+                  c.created_at, c.updated_at, c.content_types, c.content_type_variables,
+                  ws.site_name, ws.site_url
          ORDER BY c.created_at DESC`,
         [userId]
       );
@@ -152,7 +155,9 @@ router.get('/', authenticateToken, async (req, res) => {
        LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
        LEFT JOIN title_queue tq ON c.id = tq.campaign_id
        WHERE c.user_id = $1
-       GROUP BY c.id, ws.site_name, ws.site_url
+       GROUP BY c.id, c.topic, c.context, c.tone_of_voice, c.writing_style, 
+                c.imperfection_list, c.schedule, c.status, c.next_publish_at,
+                c.created_at, c.updated_at, ws.site_name, ws.site_url
        ORDER BY c.created_at DESC`,
       [userId]
     );
