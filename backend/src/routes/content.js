@@ -1081,7 +1081,18 @@ async function processContentGeneration(jobId, campaign, title, options) {
     
     // Generate the blog post content
     logger.info(`Generating blog post for job ${jobId}`);
-    const blogPost = await contentGenerator.generateBlogPost(campaign, options);
+    
+    // Create a clean campaign object to avoid circular references
+    const cleanCampaign = {
+      id: campaign.id,
+      topic: campaign.topic,
+      context: campaign.context,
+      toneOfVoice: campaign.tone_of_voice,
+      writingStyle: campaign.writing_style,
+      imperfectionList: campaign.imperfection_list
+    };
+    
+    const blogPost = await contentGenerator.generateBlogPost(cleanCampaign, options);
     logger.info(`Blog post generated for job ${jobId}, word count: ${blogPost.wordCount}`);
     
     // Generate keywords for SEO
@@ -1110,8 +1121,16 @@ async function processContentGeneration(jobId, campaign, title, options) {
       keywordsCount: keywords.length
     });
     
-    const jsonContent = JSON.stringify(contentData);
-    logger.info(`JSON content length for job ${jobId}: ${jsonContent.length}`);
+    // Try to serialize the content data
+    let jsonContent;
+    try {
+      jsonContent = JSON.stringify(contentData);
+      logger.info(`JSON content length for job ${jobId}: ${jsonContent.length}`);
+    } catch (serializeError) {
+      logger.error(`JSON serialization failed for job ${jobId}:`, serializeError);
+      logger.error(`Content data that failed to serialize:`, contentData);
+      throw new Error(`Failed to serialize content data: ${serializeError.message}`);
+    }
     
     // Validate JSON before saving
     try {
