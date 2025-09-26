@@ -337,7 +337,7 @@ const TitleQueue = () => {
       return;
     }
 
-    if (!window.confirm(`Generate high-quality SEO content for ${approvedTitles.length} approved titles? This will create comprehensive 1000+ word articles with keywords. Processing may take 2-3 minutes per title.`)) {
+    if (!window.confirm(`Start background content generation for ${approvedTitles.length} approved titles? This will create comprehensive 1000+ word SEO articles. You can monitor progress in the Content Dashboard.`)) {
       return;
     }
 
@@ -347,33 +347,38 @@ const TitleQueue = () => {
       let successCount = 0;
       let errorCount = 0;
       
-      // Process titles one by one to avoid timeout issues
+      // Start background jobs for each title
       for (let i = 0; i < approvedTitles.length; i++) {
         const title = approvedTitles[i];
         
         try {
-          // Show progress toast with SEO context
-          toast.loading(`Generating SEO content ${i + 1}/${approvedTitles.length}: ${title.title} (1000+ words, keywords)`, {
+          // Show progress toast
+          toast.loading(`Starting background generation ${i + 1}/${approvedTitles.length}: ${title.title}`, {
             duration: 0,
             id: 'content-generation'
           });
           
-          // Generate content for single title (restored for SEO quality)
+          // Start background content generation
           const response = await contentAPI.generate({
             campaignId,
             titleId: title.id,
             contentType: 'blog-post',
-            wordCount: 1000, // Restored for SEO - longer content ranks better
+            wordCount: 1000,
             tone: campaign?.toneOfVoice || 'conversational',
-            includeKeywords: true, // Re-enabled for SEO
+            includeKeywords: true,
             includeImages: false
           });
           
           successCount++;
-          console.log(`Successfully generated content for title ${i + 1}/${approvedTitles.length}`);
+          console.log(`Started background generation for title ${i + 1}/${approvedTitles.length}: Job ID ${response.jobId}`);
+          
+          // Add delay between jobs to prevent overwhelming the system
+          if (i < approvedTitles.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay
+          }
           
         } catch (titleError) {
-          console.error(`Error generating content for title ${i + 1}:`, titleError);
+          console.error(`Error starting generation for title ${i + 1}:`, titleError);
           errorCount++;
         }
       }
@@ -382,19 +387,19 @@ const TitleQueue = () => {
       toast.dismiss('content-generation');
       
       if (successCount > 0) {
-        toast.success(`Generated content for ${successCount} titles successfully`);
-        // Navigate to content generation page
+        toast.success(`Started background generation for ${successCount} titles. Check Content Dashboard for progress.`);
+        // Navigate to content dashboard
         window.location.href = `/content/${campaignId}`;
       }
       
       if (errorCount > 0) {
-        toast.error(`Failed to generate content for ${errorCount} titles`);
+        toast.error(`Failed to start generation for ${errorCount} titles`);
       }
       
     } catch (error) {
       console.error('Error in content generation process:', error);
       toast.dismiss('content-generation');
-      toast.error('Failed to generate content. Please try again.');
+      toast.error('Failed to start content generation. Please try again.');
     } finally {
       setGeneratingContent(false);
     }

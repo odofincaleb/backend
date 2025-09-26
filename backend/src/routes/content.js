@@ -25,7 +25,7 @@ const generateKeywordsSchema = Joi.object({
 
 /**
  * POST /api/content/generate
- * Generate blog post content for a title
+ * Generate blog post content for a title (background processing)
  */
 router.post('/generate', authenticateToken, async (req, res) => {
   try {
@@ -73,76 +73,42 @@ router.post('/generate', authenticateToken, async (req, res) => {
     const campaign = campaignResult.rows[0];
     const title = titleResult.rows[0];
 
-    logger.info(`Generating content for title: ${title.title}`);
+    logger.info(`Starting background content generation for title: ${title.title}`);
 
-    // Generate the blog post content (restored for SEO quality)
-    const contentOptions = {
+    // Create a background job entry
+    const jobResult = await query(`
+      INSERT INTO content_queue (campaign_id, title, status, created_at)
+      VALUES ($1, $2, 'processing', NOW())
+      RETURNING id
+    `, [campaignId, title.title]);
+
+    const jobId = jobResult.rows[0].id;
+
+    // Start background processing (don't await)
+    processContentGeneration(jobId, campaign, title, {
       contentType,
-      wordCount: Math.max(wordCount, 1000), // Ensure minimum 1000 words for SEO
+      wordCount: Math.max(wordCount, 1000),
       tone,
-      includeKeywords: true, // Re-enable keywords for SEO
+      includeKeywords: true,
       includeImages: false
-    };
+    }).catch(error => {
+      logger.error(`Background content generation failed for job ${jobId}:`, error);
+      // Update job status to failed
+      query(`
+        UPDATE content_queue 
+        SET status = 'failed', error_message = $1
+        WHERE id = $2
+      `, [error.message, jobId]);
+    });
 
-    const blogPost = await contentGenerator.generateBlogPost(campaign, contentOptions);
-    
-    // Generate keywords for SEO (essential for search rankings)
-    let keywords = [];
-    if (includeKeywords) {
-      keywords = await contentGenerator.generateKeywords(campaign.topic, blogPost.content);
-    }
-
-    // Generate featured image if requested (DISABLED to prevent unnecessary API calls)
-    let featuredImage = null;
-    if (includeImages && false) { // Force disabled to prevent costs
-      const imagePrompt = `${campaign.topic}: ${title.title}`;
-      featuredImage = await contentGenerator.generateFeaturedImage(imagePrompt);
-    }
-
-    // Save the generated content to database
-    const contentResult = await query(
-      `INSERT INTO content_queue (campaign_id, title, generated_content, status)
-       VALUES ($1, $2, $3, 'completed')
-       RETURNING id, title, generated_content, status, created_at`,
-      [campaignId, title.title, JSON.stringify({
-        content: blogPost.content,
-        contentType,
-        wordCount,
-        tone,
-        keywords,
-        featuredImage
-      })]
-    );
-
-    const generatedContent = contentResult.rows[0];
-
-    // Log the event
-    await query(
-      `INSERT INTO logs (user_id, campaign_id, event_type, message, severity)
-       VALUES ($1, $2, 'content_generated', 'Generated content for title: ${title.title}', 'info')`,
-      [userId, campaignId]
-    );
-
-    logger.info('Content generated successfully:', { userId, campaignId, titleId });
-
-    const contentData = JSON.parse(generatedContent.generated_content);
-    
+    // Return immediately with job ID
     res.json({
       success: true,
-      message: 'Content generated successfully',
-      content: {
-        id: generatedContent.id,
-        title: generatedContent.title,
-        content: contentData.content,
-        contentType: contentData.contentType,
-        wordCount: contentData.wordCount,
-        tone: contentData.tone,
-        keywords: contentData.keywords || [],
-        featuredImage: contentData.featuredImage,
-        status: generatedContent.status,
-        createdAt: generatedContent.created_at
-      }
+      message: 'Content generation started in background',
+      jobId: jobId,
+      status: 'processing'
     });
+
 
   } catch (error) {
     logger.error('Generate content error:', error);
@@ -772,5 +738,143 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     });
   }
 });
+
+/**
+ * GET /api/content/status/:jobId
+ * Check the status of a background content generation job
+ */
+router.get('/status/:jobId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const jobId = req.params.jobId;
+
+    const result = await query(`
+      SELECT cq.*, c.topic as campaign_topic
+      FROM content_queue cq
+      JOIN campaigns c ON cq.campaign_id = c.id
+      WHERE cq.id = $1 AND c.user_id = $2
+    `, [jobId, userId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Job not found',
+        message: 'The specified job does not exist or does not belong to you'
+      });
+    }
+
+    const job = result.rows[0];
+    const response = {
+      jobId: job.id,
+      title: job.title,
+      status: job.status,
+      createdAt: job.created_at,
+      completedAt: job.completed_at,
+      errorMessage: job.error_message
+    };
+
+    // If completed, include the content
+    if (job.status === 'completed' && job.generated_content) {
+      try {
+        const contentData = JSON.parse(job.generated_content);
+        response.content = contentData;
+      } catch (parseError) {
+        logger.error('Error parsing generated content:', parseError);
+        response.content = null;
+      }
+    }
+
+    res.json(response);
+
+  } catch (error) {
+    logger.error('Get job status error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to get job status'
+    });
+  }
+});
+
+/**
+ * GET /api/content/jobs/:campaignId
+ * Get all content generation jobs for a campaign
+ */
+router.get('/jobs/:campaignId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const campaignId = req.params.campaignId;
+
+    // Verify campaign belongs to user
+    const campaignResult = await query(
+      'SELECT id FROM campaigns WHERE id = $1 AND user_id = $2',
+      [campaignId, userId]
+    );
+
+    if (campaignResult.rows.length === 0) {
+      return res.status(404).json({
+        error: 'Campaign not found',
+        message: 'The specified campaign does not exist or does not belong to you'
+      });
+    }
+
+    const jobs = await query(`
+      SELECT id, title, status, created_at, completed_at, error_message
+      FROM content_queue 
+      WHERE campaign_id = $1
+      ORDER BY created_at DESC
+    `, [campaignId]);
+
+    res.json({
+      success: true,
+      jobs: jobs.rows
+    });
+
+  } catch (error) {
+    logger.error('Get campaign jobs error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to get campaign jobs'
+    });
+  }
+});
+
+/**
+ * Background content generation function
+ */
+async function processContentGeneration(jobId, campaign, title, options) {
+  try {
+    logger.info(`Processing content generation job ${jobId} for title: ${title.title}`);
+    
+    // Generate the blog post content
+    const blogPost = await contentGenerator.generateBlogPost(campaign, options);
+    
+    // Generate keywords for SEO
+    let keywords = [];
+    if (options.includeKeywords) {
+      keywords = await contentGenerator.generateKeywords(campaign.topic, blogPost.content);
+    }
+
+    // Save the generated content
+    await query(`
+      UPDATE content_queue 
+      SET status = 'completed', 
+          generated_content = $1,
+          completed_at = NOW()
+      WHERE id = $2
+    `, [JSON.stringify({
+      content: blogPost.content,
+      contentType: options.contentType,
+      wordCount: blogPost.wordCount,
+      tone: options.tone,
+      keywords,
+      featuredImage: null
+    }), jobId]);
+
+    logger.info(`Content generation completed for job ${jobId}`);
+    
+  } catch (error) {
+    logger.error(`Content generation failed for job ${jobId}:`, error);
+    throw error;
+  }
+}
 
 module.exports = router;

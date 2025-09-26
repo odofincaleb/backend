@@ -225,6 +225,16 @@ export const contentAPI = {
   delete: (id) => retryRequest({
     method: 'DELETE',
     url: `/content/${id}`
+  }),
+  
+  getJobs: (campaignId) => retryRequest({
+    method: 'GET',
+    url: `/content/jobs/${campaignId}`
+  }),
+  
+  getJobStatus: (jobId) => retryRequest({
+    method: 'GET',
+    url: `/content/status/${jobId}`
   })
 };
 
