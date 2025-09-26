@@ -78,7 +78,7 @@ router.post('/generate', authenticateToken, async (req, res) => {
     // Create a background job entry
     const jobResult = await query(`
       INSERT INTO content_queue (campaign_id, title, status, created_at)
-      VALUES ($1, $2, 'processing', NOW())
+      VALUES ($1, $2, 'in_progress', NOW())
       RETURNING id
     `, [campaignId, title.title]);
 
@@ -954,7 +954,7 @@ router.get('/publishing-status/:campaignId', authenticateToken, async (req, res)
           WHEN COALESCE(publishing_status, 'pending') = 'approved' THEN 'Approved (Scheduled)'
           WHEN COALESCE(publishing_status, 'pending') = 'rejected' THEN 'Rejected'
           WHEN status = 'completed' THEN 'Pending Review'
-          WHEN status = 'processing' THEN 'Generating'
+          WHEN status = 'in_progress' THEN 'Generating'
           ELSE 'Pending'
         END as display_status
       FROM content_queue 

@@ -58,7 +58,7 @@ const ContentDashboard = () => {
 
   const getStatusBadge = (status) => {
     const variants = {
-      'processing': 'warning',
+      'in_progress': 'warning',
       'completed': 'success',
       'failed': 'danger',
       'pending': 'secondary'
@@ -105,7 +105,7 @@ const ContentDashboard = () => {
     return <Badge bg={variants[status] || 'secondary'}>{status}</Badge>;
   };
 
-  const processingJobs = jobs.filter(job => job.status === 'processing');
+  const processingJobs = jobs.filter(job => job.status === 'in_progress');
   const completedJobs = jobs.filter(job => job.status === 'completed');
   const failedJobs = jobs.filter(job => job.status === 'failed');
 
