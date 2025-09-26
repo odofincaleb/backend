@@ -124,12 +124,15 @@ router.get('/', authenticateToken, async (req, res) => {
                 c.imperfection_list, c.schedule, c.schedule_hours, c.status, c.next_publish_at,
                 c.created_at, c.updated_at, c.content_types, c.content_type_variables,
                 ws.site_name, ws.site_url,
-                0 as posts_published,
-                0 as titles_in_queue,
-                0 as approved_titles
+                COUNT(cq.id) as posts_published,
+                COUNT(tq.id) as titles_in_queue,
+                COUNT(CASE WHEN tq.status = 'approved' THEN 1 END) as approved_titles
          FROM campaigns c
          LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
+         LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
+         LEFT JOIN title_queue tq ON c.id = tq.campaign_id
          WHERE c.user_id = $1
+         GROUP BY c.id, ws.site_name, ws.site_url
          ORDER BY c.created_at DESC`,
         [userId]
       );
@@ -141,12 +144,15 @@ router.get('/', authenticateToken, async (req, res) => {
               c.imperfection_list, c.schedule, c.status, c.next_publish_at,
               c.created_at, c.updated_at,
               ws.site_name, ws.site_url,
-              0 as posts_published,
-              0 as titles_in_queue,
-              0 as approved_titles
+              COUNT(cq.id) as posts_published,
+              COUNT(tq.id) as titles_in_queue,
+              COUNT(CASE WHEN tq.status = 'approved' THEN 1 END) as approved_titles
        FROM campaigns c
        LEFT JOIN wordpress_sites ws ON c.wordpress_site_id = ws.id
+       LEFT JOIN content_queue cq ON c.id = cq.campaign_id AND cq.status = 'completed'
+       LEFT JOIN title_queue tq ON c.id = tq.campaign_id
        WHERE c.user_id = $1
+       GROUP BY c.id, ws.site_name, ws.site_url
        ORDER BY c.created_at DESC`,
       [userId]
     );
